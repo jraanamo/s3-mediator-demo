@@ -55,7 +55,7 @@ the already-built binary from wherever it was invoked).
 client.id=
 backend.url=https://backend.example.test
 backend.login-check-interval-seconds=60
-catalog.poll-interval-seconds=30
+catalog.poll-interval-seconds=60
 simulate.interval-seconds=10
 upload.interval-seconds=20
 upload.batch-size=10

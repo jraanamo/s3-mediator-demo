@@ -45,7 +45,7 @@ public class Main {
         }, 0, props.getInt("backend.login-check-interval-seconds", 60), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(catalogSync::poll, 0,
-                props.getInt("catalog.poll-interval-seconds", 30), TimeUnit.SECONDS);
+                props.getInt("catalog.poll-interval-seconds", 60), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(() -> {
             Receipt receipt = simulator.simulate();

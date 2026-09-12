@@ -108,7 +108,9 @@ INBOX_PAGE_SIZE=50
 
 ## Deployment
 
-Deployed as a single always-on instance on Fly.io (free tier, one shared-cpu-1x/256MB VM). One instance is a deliberate choice, not just a cost-saving one: CatalogPublisher and InboxProcessor run as in-process timers with no distributed locking, so a second concurrent instance would race to publish config/catalog and drain the same inbox objects. All POS clients connect to this single Backend URL. Scaling beyond one instance is out of scope for this demo (would require moving these timers to a coordinated/single-leader scheduling model).
+Deployed as a single Fly.io instance (one shared-cpu-1x VM, `fly scale count 1`). One instance is a deliberate choice, not just a cost-saving one: CatalogPublisher and InboxProcessor run as in-process timers with no distributed locking, so a second concurrent instance would race to publish config/catalog and drain the same inbox objects. All POS clients connect to this single Backend URL. Scaling beyond one instance is out of scope for this demo (would require moving these timers to a coordinated/single-leader scheduling model).
+
+Fly.io has no free tier for new accounts, so the instance is not always-on: `fly.toml` allows it to scale to zero when idle (`min_machines_running = 0`) and wake on the next incoming request. See [single-backend-instance](../decision/single-backend-instance.md) for the consequences on the background timers.
 
 ## Out of Scope
 

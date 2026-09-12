@@ -100,6 +100,9 @@ existing logic runs:
 
 - Explainer text: what this demo is (detaching POS client↔server communication via a Mediator),
   drawn from `AGENTS.md`/`README.md`.
+- Left-hand column (mirrors the right-hand "Session totals" sidebar): one short color-coded card per
+  component — POS Client, Mediator, Backend — naming its technology and its role in this demo. Stacks
+  above the main column on narrow viewports.
 - Live sequence diagram: three lifelines (Client, Mediator, Backend, left-to-right), each a distinct
   color. Hand-authored static SVG (a sequence diagram fit better than a node/edge architecture
   diagram, which kept looking cluttered — the `archify` skill was tried but not used in the end) with

@@ -100,15 +100,20 @@ existing logic runs:
 
 - Explainer text: what this demo is (detaching POS client↔server communication via a Mediator),
   drawn from `AGENTS.md`/`README.md`.
-- Live diagram: client node(s), one Backend node, and the Mediator's storage areas (config/catalog,
-  inbox, archive) inside a bounding box. Built as static SVG (laid out with help from the `archify`
-  skill for visual quality) with plain JS toggling a "pulse" class on the relevant node/edge when a
-  matching SSE event arrives, and a short label (e.g. "catalog unchanged", "receipt archived").
-  Archify's own trace-motion/export features aren't used here — only its diagram composition.
-- Recent-events feed: a bounded list (last ~100 events) of type/source/clientId/receiptId/outcome/time.
+- Live sequence diagram: three lifelines (Client, Mediator, Backend, left-to-right), each a distinct
+  color. Hand-authored static SVG (a sequence diagram fit better than a node/edge architecture
+  diagram, which kept looking cluttered — the `archify` skill was tried but not used in the end) with
+  plain JS adding a "pulse" class to the relevant arrow when a matching SSE event arrives, and
+  updating that arrow's label to the specific event type.
+- Recent-events feed: a bounded list (last ~100 events) of type/source/clientId/receiptId/outcome/
+  durationMs/time.
+- Session totals (right-hand sidebar, stacks below the main column on narrow viewports): running
+  counts of receipts received (`receipt-processed`, `outcome: ok`) and archived (`receipt-archived`,
+  `outcome: ok`) since the page connected — reset on refresh, matching the rest of the page's
+  "no history" stance.
 - Connection indicator: whether the SSE stream is currently connected.
 - Bound the number of distinctly tracked client nodes shown (e.g. latest 20 distinct `clientId`s) so
-  the diagram doesn't grow unbounded over a long-running demo.
+  the "Clients seen" list doesn't grow unbounded over a long-running demo.
 
 ## Security / Validation
 

@@ -63,12 +63,31 @@
   header h1 { font-size: 1.6rem; margin: 0 0 10px; letter-spacing: -0.01em; }
   header p { color: var(--muted); line-height: 1.55; margin: 0 0 8px; max-width: 72ch; }
   main {
-    max-width: 940px;
+    max-width: 1180px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    align-items: start;
+    gap: 18px;
+  }
+  .main-col, .side-col {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    min-width: 0;
   }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+  .stats { display: flex; flex-direction: column; gap: 14px; }
+  .stat-tile dt {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 2px;
+  }
+  .stat-tile dd { font-size: 1.8rem; font-weight: 700; margin: 0; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -140,6 +159,7 @@
   <p>This page shows that traffic live. Nothing below is stored — it's activity observed since you opened this page.</p>
 </header>
 <main>
+<div class="main-col">
   <div class="panel">
     <h2>Live sequence <span id="conn-status" class="disconnected">connecting…</span></h2>
     <div class="legend">
@@ -194,6 +214,23 @@
     <h2>Recent events (latest 100)</h2>
     <ul id="feed-list"><li class="empty-hint">Waiting for events…</li></ul>
   </div>
+</div>
+
+<aside class="side-col">
+  <div class="panel">
+    <h2>Session totals</h2>
+    <dl class="stats">
+      <div class="stat-tile">
+        <dt>Receipts received</dt>
+        <dd id="stat-received">0</dd>
+      </div>
+      <div class="stat-tile">
+        <dt>Receipts archived</dt>
+        <dd id="stat-archived">0</dd>
+      </div>
+    </dl>
+  </div>
+</aside>
 </main>
 
 <script>
@@ -201,9 +238,13 @@
   const feed = document.getElementById('feed-list');
   const clientsList = document.getElementById('clients-list');
   const connStatus = document.getElementById('conn-status');
+  const statReceived = document.getElementById('stat-received');
+  const statArchived = document.getElementById('stat-archived');
   const clients = new Map();
   const MAX_FEED = 100;
   const MAX_CLIENTS = 20;
+  let receivedCount = 0;
+  let archivedCount = 0;
 
   const edgeForType = {
     'login': 'edge-client-backend',
@@ -264,9 +305,23 @@
     }
   }
 
+  function updateStats(evt) {
+    if (evt.outcome !== 'ok') return;
+    // "received" = the Backend read a receipt out of the inbox; "archived" = it
+    // finished copying it to /archive/ and removing it from /inbox/.
+    if (evt.type === 'receipt-processed') {
+      receivedCount += 1;
+      statReceived.textContent = String(receivedCount);
+    } else if (evt.type === 'receipt-archived') {
+      archivedCount += 1;
+      statArchived.textContent = String(archivedCount);
+    }
+  }
+
   function handleEvent(evt) {
     addFeedItem(evt);
     trackClient(evt);
+    updateStats(evt);
     const edgeId = edgeForType[evt.type];
     if (edgeId) {
       pulse(edgeId, evt.type);

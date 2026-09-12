@@ -18,15 +18,17 @@ public class CatalogSyncService {
 
     private final AuthClient authClient;
     private final HttpTransport http;
+    private final MonitorReporter reporter;
 
     private volatile JSONObject config;
     private volatile JSONArray catalog;
     private String configEtag;
     private String catalogEtag;
 
-    public CatalogSyncService(AuthClient authClient, HttpTransport http) {
+    public CatalogSyncService(AuthClient authClient, HttpTransport http, MonitorReporter reporter) {
         this.authClient = authClient;
         this.http = http;
+        this.reporter = reporter;
     }
 
     public JSONObject currentConfig() {
@@ -42,11 +44,13 @@ public class CatalogSyncService {
             pollOne("config", authClient.currentConfigUrl(), configEtag, this::applyConfig);
         } catch (IOException e) {
             LOG.error("config poll failed", e);
+            reporter.report("config-check", "error", null, e.getMessage());
         }
         try {
             pollOne("catalog", authClient.currentCatalogUrl(), catalogEtag, this::applyCatalog);
         } catch (IOException e) {
             LOG.error("catalog poll failed", e);
+            reporter.report("catalog-check", "error", null, e.getMessage());
         }
     }
 
@@ -55,9 +59,11 @@ public class CatalogSyncService {
     }
 
     private void pollOne(String name, String url, String etag, BodyHandler onChanged) throws IOException {
+        String eventType = name + "-check";
         HttpResult result = http.getConditional(url, etag);
         if (result.status() == 304) {
             LOG.info("{} unchanged", name);
+            reporter.report(eventType, "unchanged", null, null);
             return;
         }
         if (result.status() == 401) {
@@ -69,9 +75,11 @@ public class CatalogSyncService {
         if (result.status() == 200) {
             onChanged.apply(result.body(), result.etag());
             LOG.info("{} changed, fetched new version", name);
+            reporter.report(eventType, "ok", null, null);
             return;
         }
         LOG.error("{} poll failed: HTTP {}", name, result.status());
+        reporter.report(eventType, "error", null, "HTTP " + result.status());
     }
 
     private void applyConfig(String body, String etag) {

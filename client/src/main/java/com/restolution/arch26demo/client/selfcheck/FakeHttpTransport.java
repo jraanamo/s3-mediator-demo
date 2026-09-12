@@ -31,8 +31,16 @@ public class FakeHttpTransport implements HttpTransport {
         return this;
     }
 
+    public int monitorEventCalls = 0;
+
     @Override
     public HttpResult postJson(String url, String jsonBody, String bearerToken) {
+        if (url.endsWith("/monitor/events")) {
+            // Monitor reporting is a separate concern from the login/upload-receipts flows most
+            // checks script — don't make every check queue responses for it too.
+            monitorEventCalls++;
+            return new HttpResult(204, "", null);
+        }
         postCalls++;
         return pop(postResponses, "postJson");
     }

@@ -1,6 +1,7 @@
 package com.restolution.arch26demo.client.selfcheck;
 
 import com.restolution.arch26demo.client.AuthClient;
+import com.restolution.arch26demo.client.MonitorReporter;
 import com.restolution.arch26demo.client.ReceiptUploader;
 import com.restolution.arch26demo.client.http.HttpResult;
 import com.restolution.arch26demo.client.model.Product;
@@ -34,7 +35,8 @@ public final class ReceiptUploaderChecks {
         http.queuePut(new HttpResult(200, "", null));
 
         AuthClient authClient = new AuthClient("http://backend", "client-1", http);
-        ReceiptUploader uploader = new ReceiptUploader(authClient, http, "http://backend", 10, 2, 60, 5);
+        MonitorReporter reporter = new MonitorReporter(authClient, http, "http://backend");
+        ReceiptUploader uploader = new ReceiptUploader(authClient, http, reporter, "http://backend", 10, 2, 60, 5);
 
         uploader.enqueue(receipt);
         uploader.uploadBatch();
@@ -55,7 +57,8 @@ public final class ReceiptUploaderChecks {
 
         // baseDelay/maxDelay of 0 so a retried receipt is immediately ready again on the next uploadBatch() call.
         AuthClient authClient = new AuthClient("http://backend", "client-1", http);
-        ReceiptUploader uploader = new ReceiptUploader(authClient, http, "http://backend", 10, 0, 0, 2);
+        MonitorReporter reporter = new MonitorReporter(authClient, http, "http://backend");
+        ReceiptUploader uploader = new ReceiptUploader(authClient, http, reporter, "http://backend", 10, 0, 0, 2);
 
         uploader.enqueue(receipt);
 

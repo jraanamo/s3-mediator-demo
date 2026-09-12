@@ -18,12 +18,14 @@ public class Main {
         String clientId = props.clientId();
         LOG.info("starting POS client simulator, client.id={}", clientId);
 
+        String backendUrl = props.get("backend.url", "http://localhost:3000");
         JdkHttpTransport http = new JdkHttpTransport();
-        AuthClient authClient = new AuthClient(props.get("backend.url", "http://localhost:3000"), clientId, http);
-        CatalogSyncService catalogSync = new CatalogSyncService(authClient, http);
+        AuthClient authClient = new AuthClient(backendUrl, clientId, http);
+        MonitorReporter reporter = new MonitorReporter(authClient, http, backendUrl);
+        CatalogSyncService catalogSync = new CatalogSyncService(authClient, http, reporter);
         ReceiptSimulator simulator = new ReceiptSimulator(catalogSync, clientId);
         ReceiptUploader uploader = new ReceiptUploader(
-                authClient, http, props.get("backend.url", "http://localhost:3000"),
+                authClient, http, reporter, backendUrl,
                 props.getInt("upload.batch-size", 10),
                 props.getInt("retry.base-delay-seconds", 2),
                 props.getInt("retry.max-delay-seconds", 60),

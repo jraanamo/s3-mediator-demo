@@ -6,6 +6,8 @@ export const INBOX_PREFIX = 'inbox/';
 // arbitrary key write.
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
+const noopEmit = () => {};
+
 function archiveKey(receipt) {
   if (!SAFE_ID_RE.test(receipt.clientId ?? '') || !SAFE_ID_RE.test(receipt.receiptId ?? '')) {
     throw new Error(`invalid clientId/receiptId in receipt: ${JSON.stringify(receipt)}`);
@@ -20,34 +22,42 @@ function archiveKey(receipt) {
   return `archive/${receipt.clientId}/${yyyy}/${mm}/${dd}/${receipt.receiptId}.json`;
 }
 
-async function processObject(store, key, log) {
+async function processObject(store, key, log, emit) {
   const receipt = await store.getJson(key);
   log(`processing receipt ${receipt.receiptId} from ${receipt.clientId}, total=${receipt.totalAmount}`);
+  emit({ type: 'receipt-processed', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok' });
+
   const destKey = archiveKey(receipt);
   await store.copy(key, destKey);
   try {
     await store.delete(key);
+    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok' });
   } catch (err) {
     // Copy already succeeded and is idempotent (same destination key), so a
     // failed delete just means this object gets reprocessed next interval.
     log(`warning: failed to delete ${key} after archiving, will reprocess: ${err.message}`);
+    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'error', detail: 'delete failed, will retry' });
   }
 }
 
 // Drains the whole inbox, one page at a time, tolerating per-object failures
 // (a bad object is logged and left for the next interval rather than
 // aborting the rest of the page).
-export async function processInbox(store, pageSize, log = console.log) {
+export async function processInbox(store, pageSize, log = console.log, emit = noopEmit) {
   let continuationToken;
+  let totalFound = 0;
   do {
     const { keys, nextToken } = await store.listPage(INBOX_PREFIX, continuationToken, pageSize);
+    totalFound += keys.length;
     for (const key of keys) {
       try {
-        await processObject(store, key, log);
+        await processObject(store, key, log, emit);
       } catch (err) {
         log(`error: failed to process ${key}: ${err.message}`);
+        emit({ type: 'receipt-processed', source: 'backend', outcome: 'error', detail: err.message });
       }
     }
     continuationToken = nextToken;
   } while (continuationToken);
+  emit({ type: 'inbox-poll', source: 'backend', outcome: 'ok', detail: `found ${totalFound} object(s)` });
 }

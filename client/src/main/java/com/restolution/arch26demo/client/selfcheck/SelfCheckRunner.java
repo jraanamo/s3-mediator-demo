@@ -19,7 +19,8 @@ public final class SelfCheckRunner {
                 new NamedCheck("AuthClient: invalidate() forces a fresh re-login", AuthClientChecks::invalidateTriggersRelogin),
                 new NamedCheck("CatalogSyncService: 304 is a no-op, 200 replaces state", CatalogSyncServiceChecks::conditionalGetReplacesOnlyOnChange),
                 new NamedCheck("ReceiptUploader: happy path empties the queue", ReceiptUploaderChecks::happyPathEmptiesQueue),
-                new NamedCheck("ReceiptUploader: retries with backoff then drops after max attempts", ReceiptUploaderChecks::retryBackoffThenDropAfterMaxAttempts)
+                new NamedCheck("ReceiptUploader: retries with backoff then drops after max attempts", ReceiptUploaderChecks::retryBackoffThenDropAfterMaxAttempts),
+                new NamedCheck("MonitorReporter: a reporting failure never propagates to the caller", MonitorReporterChecks::reportNeverPropagatesFailure)
         );
 
         int failures = 0;

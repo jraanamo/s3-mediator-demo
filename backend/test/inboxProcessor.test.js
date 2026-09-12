@@ -40,6 +40,29 @@ test('a receipt with a path-traversal clientId/receiptId is rejected, not archiv
   assert.deepEqual(escapedKeys, [], 'no object should be written outside inbox/archive prefixes');
 });
 
+test('processInbox emits receipt-processed and receipt-archived events, and one inbox-poll summary', async () => {
+  const store = createFakeStore();
+  await store.putJson(`${INBOX_PREFIX}r0.json`, receipt('r0'));
+
+  const events = [];
+  await processInbox(store, 10, () => {}, (event) => events.push(event));
+
+  const processed = events.find((e) => e.type === 'receipt-processed');
+  const archived = events.find((e) => e.type === 'receipt-archived');
+  const poll = events.find((e) => e.type === 'inbox-poll');
+
+  assert.ok(processed, 'a receipt-processed event should be emitted');
+  assert.equal(processed.receiptId, 'r0');
+  assert.equal(processed.outcome, 'ok');
+
+  assert.ok(archived, 'a receipt-archived event should be emitted');
+  assert.equal(archived.receiptId, 'r0');
+  assert.equal(archived.outcome, 'ok');
+
+  assert.ok(poll, 'exactly one inbox-poll summary event should be emitted');
+  assert.equal(events.filter((e) => e.type === 'inbox-poll').length, 1);
+});
+
 test('a failed delete leaves the object for reprocessing without duplicating archive state', async () => {
   const store = createFakeStore();
   await store.putJson(`${INBOX_PREFIX}r0.json`, receipt('r0'));

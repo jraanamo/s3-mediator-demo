@@ -2,6 +2,7 @@ package com.restolution.arch26demo.client.selfcheck;
 
 import com.restolution.arch26demo.client.AuthClient;
 import com.restolution.arch26demo.client.CatalogSyncService;
+import com.restolution.arch26demo.client.MonitorReporter;
 import com.restolution.arch26demo.client.http.HttpResult;
 
 import java.time.Instant;
@@ -28,7 +29,8 @@ public final class CatalogSyncServiceChecks {
         http.queueGet(new HttpResult(200, "[{\"id\":\"y\"}]", "e4"));
 
         AuthClient authClient = new AuthClient("http://backend", "client-1", http);
-        CatalogSyncService sync = new CatalogSyncService(authClient, http);
+        MonitorReporter reporter = new MonitorReporter(authClient, http, "http://backend");
+        CatalogSyncService sync = new CatalogSyncService(authClient, http, reporter);
 
         sync.poll();
         Check.equal(1, sync.currentConfig().getInt("a"), "poll 1 should apply the fetched config");

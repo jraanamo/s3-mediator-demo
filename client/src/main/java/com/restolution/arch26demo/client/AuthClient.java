@@ -49,6 +49,10 @@ public class AuthClient {
     }
 
     /** Call after any Mediator/Backend call returns 401 to force a fresh login before retrying. */
+    public String clientId() {
+        return clientId;
+    }
+
     public synchronized void invalidate() {
         expiresAt = Instant.EPOCH;
     }

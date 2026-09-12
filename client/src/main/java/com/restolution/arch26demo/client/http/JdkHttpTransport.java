@@ -16,6 +16,7 @@ public class JdkHttpTransport implements HttpTransport {
     @Override
     public HttpResult postJson(String url, String jsonBody, String bearerToken) throws IOException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(5))
                 .header("content-type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
         if (bearerToken != null) {
@@ -26,7 +27,7 @@ public class JdkHttpTransport implements HttpTransport {
 
     @Override
     public HttpResult getConditional(String url, String ifNoneMatchEtag) throws IOException {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).GET();
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(5)).GET();
         if (ifNoneMatchEtag != null) {
             builder.header("If-None-Match", ifNoneMatchEtag);
         }
@@ -36,6 +37,7 @@ public class JdkHttpTransport implements HttpTransport {
     @Override
     public HttpResult putJson(String url, String jsonBody) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(5))
                 .header("content-type", "application/json")
                 .PUT(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();

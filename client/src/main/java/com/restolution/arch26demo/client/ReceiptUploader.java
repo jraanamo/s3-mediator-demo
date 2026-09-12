@@ -30,6 +30,7 @@ public class ReceiptUploader {
 
     private final AuthClient authClient;
     private final HttpTransport http;
+    private final MonitorReporter reporter;
     private final String backendUrl;
     private final int batchSize;
     private final long baseDelaySeconds;
@@ -38,10 +39,11 @@ public class ReceiptUploader {
 
     private final Deque<QueuedReceipt> queue = new ArrayDeque<>();
 
-    public ReceiptUploader(AuthClient authClient, HttpTransport http, String backendUrl,
+    public ReceiptUploader(AuthClient authClient, HttpTransport http, MonitorReporter reporter, String backendUrl,
                             int batchSize, long baseDelaySeconds, long maxDelaySeconds, int maxAttempts) {
         this.authClient = authClient;
         this.http = http;
+        this.reporter = reporter;
         this.backendUrl = backendUrl;
         this.batchSize = batchSize;
         this.baseDelaySeconds = baseDelaySeconds;
@@ -107,6 +109,7 @@ public class ReceiptUploader {
             HttpResult result = http.putJson(uploadUrl, queued.receipt().toJson());
             if (result.status() >= 200 && result.status() < 300) {
                 LOG.info("uploaded receipt {}", queued.receipt().receiptId());
+                reporter.report("receipt-uploaded", "ok", queued.receipt().receiptId(), null);
             } else {
                 LOG.error("PUT failed for receipt {}: HTTP {}", queued.receipt().receiptId(), result.status());
                 retryOrDrop(queued);
@@ -118,6 +121,7 @@ public class ReceiptUploader {
     }
 
     private void retryOrDrop(QueuedReceipt queued) {
+        reporter.report("receipt-uploaded", "error", queued.receipt().receiptId(), null);
         int attempts = queued.attempts() + 1;
         if (attempts > maxAttempts) {
             LOG.error("dropping receipt {} after {} attempts", queued.receipt().receiptId(), attempts - 1);

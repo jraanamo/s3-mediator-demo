@@ -52,12 +52,12 @@ public class Main {
             if (receipt != null) {
                 uploader.enqueue(receipt);
             }
-        }, props.getInt("simulate.interval-seconds", 10),
-                props.getInt("simulate.interval-seconds", 10), TimeUnit.SECONDS);
+        }, props.getInt("simulate.interval-seconds", 5),
+                props.getInt("simulate.interval-seconds", 5), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(uploader::uploadBatch,
-                props.getInt("upload.interval-seconds", 20),
-                props.getInt("upload.interval-seconds", 20), TimeUnit.SECONDS);
+                props.getInt("upload.interval-seconds", 10),
+                props.getInt("upload.interval-seconds", 10), TimeUnit.SECONDS);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOG.info("shutting down");

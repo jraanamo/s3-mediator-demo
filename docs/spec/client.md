@@ -8,7 +8,7 @@ A Java simulator standing in for a real POS client (RestoGo / SoftPos / RestoSna
 
 ### `POST /login`
 
-Request: device/tenant credentials (shape not defined further — out of scope).
+Request: `{ "deviceId": "..." }` (this client's configured device id).
 
 Response:
 ```json
@@ -26,15 +26,15 @@ The JWT is used as a bearer token on subsequent Backend calls. When it is expire
 
 ### `POST /upload-receipts`
 
-Request: array of receipt metadata (id, size, content-type — one entry per queued receipt).
+Request: array of `{ "receiptId": "..." }`, one entry per queued receipt.
 
-Response: array of presigned PUT URLs, one per requested receipt id, used to upload the receipt body directly to the Mediator.
+Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL>" }`, used to upload the receipt body directly to the Mediator. The fetched config also carries an `uploadReceiptsUrl` field (the Backend's own endpoint URL) for realism, but this demo client just uses its configured `backend.url` for both calls rather than switching sources mid-flight.
 
 ## Client Components
 
 - **AuthClient** — owns the current JWT, its expiry, and the current `resources` map. Exposes "get current config URL" / "get current catalog URL" to other components, transparently re-logging in when needed (expiry reached, or a 401 bubbles up from a caller).
 - **CatalogSyncService** — on `catalog-poll-interval-seconds`, issues a conditional GET (`If-None-Match: <last ETag>`) against the config and catalog presigned URLs. 304 → no-op. 200 → replace in-memory config/catalog, store new ETag. A 401 delegates to AuthClient for re-login and retries once.
-- **ReceiptSimulator** — on `simulate-interval-seconds`, builds a fake receipt (random line items drawn from the current in-memory catalog) and enqueues it in-memory.
+- **ReceiptSimulator** — on `simulate-interval-seconds`, builds a fake receipt (random products drawn from the current in-memory catalog, with a computed `totalAmount`) and enqueues it in-memory.
 - **ReceiptUploader** — on `upload-interval-seconds`, drains up to `upload-batch-size` receipts from the queue, calls `/upload-receipts`, then PUTs each receipt body to its returned presigned URL. On failure, the receipt goes back on the queue with an incremented attempt count and exponential backoff (`retry-base-delay-seconds`, doubling, capped at `retry-max-delay-seconds`); once `retry-max-attempts` is exceeded, the receipt is dropped and the failure is logged as an error.
 - **Main/Scheduler** — loads `client.properties`, wires the above onto a `ScheduledExecutorService`.
 
@@ -45,6 +45,7 @@ All state (JWT, config, catalog, receipt queue) is in-memory only. A process res
 Single file, `client.properties`, in the client working directory:
 
 ```properties
+client.id=device-1
 backend.url=https://backend.example.test
 backend.login-check-interval-seconds=60
 catalog.poll-interval-seconds=30
@@ -67,15 +68,17 @@ log4j2, console appender only (stdout), no file appender. Logged at INFO or abov
 
 ## Data Model
 
-**Config / Catalog**: opaque JSON blobs as far as the client's sync logic is concerned. The catalog is assumed to have a list of items with at least `id`, `name`, `price`, used by ReceiptSimulator to build line items.
+**Config / Catalog**: opaque JSON blobs as far as the client's sync logic is concerned. The catalog is assumed to have a list of items with at least `id`, `name`, `price`, used by ReceiptSimulator to build products.
 
-**Receipt**: JSON, generated locally:
+**Receipt**: JSON, generated locally, uploaded to `/inbox/<receiptId>.json` on the Mediator:
 ```json
 {
-  "id": "<uuid>",
-  "timestamp": "<ISO-8601>",
-  "lineItems": [
-    { "itemId": "...", "name": "...", "unitPrice": 0.0, "quantity": 1 }
+  "receiptId": "<uuid>",
+  "clientId": "...",
+  "date": "<ISO-8601>",
+  "totalAmount": 0.0,
+  "products": [
+    { "id": "...", "name": "...", "price": 0.0, "quantity": 1 }
   ]
 }
 ```

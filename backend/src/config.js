@@ -5,7 +5,6 @@ export const config = {
   backendUrl: process.env.BACKEND_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret',
   jwtExpirySeconds: Number(process.env.JWT_EXPIRY_SECONDS ?? 3600),
-  deviceIds: (process.env.DEVICE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   s3: {
     endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION ?? 'us-east-1',

@@ -1,10 +1,10 @@
-import { config } from './config.js';
 import { issueToken, verifyToken } from './jwt.js';
 import { CONFIG_KEY, CATALOG_KEY } from './catalogPublisher.js';
 
 const PRESIGN_EXPIRY_SECONDS = 600;
-// receiptId is client-supplied and gets interpolated into an S3 key below;
-// restrict it to safe characters so it can't escape the inbox/ prefix
+// deviceId/receiptId are client-supplied and get interpolated into S3 keys
+// (directly here, and via receiptId/clientId in InboxProcessor); restrict
+// them to safe characters so they can't escape the inbox/archive prefixes
 // (path traversal / arbitrary key write).
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -17,8 +17,8 @@ function bearerToken(request) {
 export function registerRoutes(app, store) {
   app.post('/login', async (request, reply) => {
     const { deviceId } = request.body ?? {};
-    if (!deviceId || !config.deviceIds.includes(deviceId)) {
-      return reply.code(401).send({ error: 'unknown device' });
+    if (!SAFE_ID_RE.test(deviceId ?? '')) {
+      return reply.code(400).send({ error: 'invalid deviceId' });
     }
 
     const { token, expiresAt } = issueToken(deviceId);

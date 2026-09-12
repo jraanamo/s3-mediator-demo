@@ -8,3 +8,4 @@
 | [inbox-processing-model](inbox-processing-model.md) | Backend drains the receipt inbox via copy-to-archive-then-delete, tolerating at-least-once reprocessing on partial failure. |
 | [backend-catalog-publishing](backend-catalog-publishing.md) | Backend synthesizes config/catalog itself and publishes them to the Mediator on a timer; no admin API in this demo. |
 | [backend-secrets-configuration](backend-secrets-configuration.md) | Backend secrets (S3 credentials, JWT secret, etc.) are supplied as Fly.io env vars/secrets, set independently of deploys. |
+| [client-identity](client-identity.md) | No client authorization; `/login` accepts any well-formed id. The client generates and persists its own id in `client.properties` on first run. |

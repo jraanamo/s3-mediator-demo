@@ -4,7 +4,7 @@
 
 The Backend is the thin, occasional direct link the POS client uses to bootstrap. It doesn't serve config/catalog or accept receipts directly — it hands out presigned URLs so the client can talk to the Mediator (S3-compatible object storage, UpCloud) directly for all bulk data exchange. The Backend also owns publishing config/catalog into the Mediator and processing uploaded receipts out of it.
 
-Single tenant for this demo: one config, one catalog, a small hardcoded list of known device ids.
+Single tenant for this demo: one config, one catalog. No authorization of clients — see [client-identity](../decision/client-identity.md).
 
 ## Bucket Layout (Mediator)
 
@@ -21,7 +21,7 @@ Single tenant for this demo: one config, one catalog, a small hardcoded list of 
 
 Request: `{ "deviceId": "..." }`
 
-Validates `deviceId` against a hardcoded in-memory device list (no secret/password check for this demo). On success:
+Accepts any `deviceId` matching `^[A-Za-z0-9_-]{1,64}$` (no registry, no secret/password check — see [client-identity](../decision/client-identity.md)). On success:
 
 ```json
 {
@@ -34,7 +34,7 @@ Validates `deviceId` against a hardcoded in-memory device list (no secret/passwo
 }
 ```
 
-Unknown `deviceId` → 401.
+Malformed `deviceId` → 400.
 
 ### `POST /upload-receipts`
 
@@ -44,8 +44,7 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /
 
 ## Components
 
-- **DeviceRegistry** — static in-memory list of known device ids (config-driven, e.g. from `.env`).
-- **AuthService** — implements `/login`: validates device id, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs.
+- **AuthService** — implements `/login`: validates `deviceId` format, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs.
 - **UploadService** — implements `/upload-receipts`: verifies JWT, generates one presigned PUT URL per requested receipt id.
 - **CatalogPublisher** — on startup, checks whether `/config/config.json` and `/catalog/catalog.json` exist in the bucket; if either is missing, synthesizes and writes it immediately so the client always has something to fetch. Then on `PUBLISH_INTERVAL_SECONDS`, regenerates and overwrites both objects (the resulting new ETag is what drives the client's conditional-GET polling).
 - **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). For each object: GET it, parse the receipt JSON, log a line to console (`receiptId`, `clientId`, `totalAmount`), `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<receiptId>.json` (path fields taken from the parsed receipt body), then `DeleteObject` on the inbox key. Copy-then-delete is the "transaction" boundary: if delete fails after a successful copy, the object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
@@ -88,7 +87,6 @@ PORT=3000
 BACKEND_URL=http://localhost:3000
 JWT_SECRET=...
 JWT_EXPIRY_SECONDS=3600
-DEVICE_IDS=device-1,device-2,device-3
 S3_ENDPOINT=https://.../upcloud-endpoint
 S3_REGION=...
 S3_BUCKET=...
@@ -101,7 +99,7 @@ INBOX_PAGE_SIZE=50
 
 ## Error Handling
 
-- Unknown device id at `/login` → 401.
+- Malformed `deviceId` at `/login` → 400.
 - Missing/expired/invalid JWT at `/upload-receipts` → 401.
 - InboxProcessor: a copy failure is logged as an error and the object is left in the inbox for retry next interval; a delete failure after a successful copy is logged as a warning and reprocessed next interval (idempotent, no duplicate side effects beyond a repeated console log line).
 - CatalogPublisher: a failure to write config/catalog is logged as an error; startup does not crash the process, but the client will simply have nothing to fetch until the next successful publish (accepted for this demo).
@@ -115,7 +113,7 @@ Fly.io has no free tier for new accounts, so the instance is not always-on: `fly
 ## Out of Scope
 
 - Multi-tenancy.
-- Real authentication/secrets for `/login` beyond a known-device-id check.
+- Any authentication/authorization of clients — `/login` trusts whatever `deviceId` it's given (see [client-identity](../decision/client-identity.md)).
 - Any read-back/reporting API over archived receipts.
 - Persistent job state for InboxProcessor/CatalogPublisher (in-memory intervals only, no durable scheduling).
 

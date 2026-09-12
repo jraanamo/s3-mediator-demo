@@ -8,7 +8,7 @@ A Java simulator standing in for a real POS client (RestoGo / SoftPos / RestoSna
 
 ### `POST /login`
 
-Request: `{ "deviceId": "..." }` (this client's configured device id).
+Request: `{ "deviceId": "..." }` (this client's generated id — see [client-identity](../decision/client-identity.md); the Backend accepts any well-formed id, no registration required).
 
 Response:
 ```json
@@ -36,7 +36,7 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL>" }`,
 - **CatalogSyncService** — on `catalog-poll-interval-seconds`, issues a conditional GET (`If-None-Match: <last ETag>`) against the config and catalog presigned URLs. 304 → no-op. 200 → replace in-memory config/catalog, store new ETag. A 401 delegates to AuthClient for re-login and retries once.
 - **ReceiptSimulator** — on `simulate-interval-seconds`, builds a fake receipt (random products drawn from the current in-memory catalog, with a computed `totalAmount`) and enqueues it in-memory.
 - **ReceiptUploader** — on `upload-interval-seconds`, drains up to `upload-batch-size` receipts from the queue, calls `/upload-receipts`, then PUTs each receipt body to its returned presigned URL. On failure, the receipt goes back on the queue with an incremented attempt count and exponential backoff (`retry-base-delay-seconds`, doubling, capped at `retry-max-delay-seconds`); once `retry-max-attempts` is exceeded, the receipt is dropped and the failure is logged as an error.
-- **Main/Scheduler** — loads `client.properties`, wires the above onto a `ScheduledExecutorService`.
+- **Main/Scheduler** — loads `client.properties`; if `client.id` is blank/absent, generates a new UUID, writes it back into `client.properties` (so it's stable across restarts), and uses it from then on. Wires the components above onto a `ScheduledExecutorService`.
 
 All state (JWT, config, catalog, receipt queue) is in-memory only. A process restart loses anything not yet uploaded — accepted tradeoff for this demo, no persistence layer.
 
@@ -45,7 +45,8 @@ All state (JWT, config, catalog, receipt queue) is in-memory only. A process res
 Single file, `client.properties`, in the client working directory:
 
 ```properties
-client.id=device-1
+# client.id is generated and written here on first run if left blank
+client.id=
 backend.url=https://backend.example.test
 backend.login-check-interval-seconds=60
 catalog.poll-interval-seconds=30
@@ -93,12 +94,13 @@ log4j2, console appender only (stdout), no file appender. Logged at INFO or abov
 
 - Real UI / interactive CLI.
 - Log file upload (logging data is written to stdout only, not synced to the Mediator).
-- Disk-backed persistence / durability across restarts.
+- Disk-backed persistence / durability across restarts (the `client.id` line in `client.properties` is the one exception — see [client-identity](../decision/client-identity.md)).
 - Real authentication scheme behind `/login`.
 
 ## Testing
 
 One runnable self-check per non-trivial piece of logic, no test framework:
+- Main/Scheduler: generates and persists `client.id` when blank; reuses the existing value when already set.
 - AuthClient: expiry-triggered and 401-triggered re-login behavior.
 - CatalogSyncService: ETag-conditional fetch (304 no-op vs 200 replace).
 - ReceiptUploader: retry/backoff progression and drop-after-max-attempts behavior.

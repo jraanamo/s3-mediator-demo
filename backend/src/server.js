@@ -20,13 +20,17 @@ const uploadReceiptsUrl = `${config.backendUrl}/upload-receipts`;
 registerRoutes(app, store, monitorHub, pageHtml);
 
 try {
-  await ensureInitialPublish(store, uploadReceiptsUrl);
+  await ensureInitialPublish(store, uploadReceiptsUrl, (event) => monitorHub.broadcast(event));
 } catch (err) {
   app.log.error(err, 'initial catalog publish failed; clients will have nothing to fetch until this succeeds');
+  monitorHub.broadcast({ type: 'catalog-publish', source: 'backend', outcome: 'error', detail: err.message });
 }
 
 setInterval(() => {
-  publish(store, uploadReceiptsUrl).catch((err) => app.log.error(err, 'catalog publish failed'));
+  publish(store, uploadReceiptsUrl, (event) => monitorHub.broadcast(event)).catch((err) => {
+    app.log.error(err, 'catalog publish failed');
+    monitorHub.broadcast({ type: 'catalog-publish', source: 'backend', outcome: 'error', detail: err.message });
+  });
 }, config.publishIntervalSeconds * 1000);
 
 setInterval(() => {

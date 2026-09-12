@@ -6,6 +6,7 @@ const EVENT_TYPES = new Set([
   'inbox-poll',
   'receipt-processed',
   'receipt-archived',
+  'catalog-publish',
 ]);
 const MAX_FIELD_LENGTH = 200;
 export const MAX_EVENT_BODY_BYTES = 2000;

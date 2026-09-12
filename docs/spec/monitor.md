@@ -44,7 +44,7 @@ Every event, whether Backend-observed or client-reported, has the same shape:
 
 ```json
 {
-  "type": "login" | "config-check" | "catalog-check" | "receipt-uploaded" | "inbox-poll" | "receipt-processed" | "receipt-archived",
+  "type": "login" | "catalog-publish" | "config-check" | "catalog-check" | "receipt-uploaded" | "inbox-poll" | "receipt-processed" | "receipt-archived",
   "source": "backend" | "client",
   "clientId": "...",
   "receiptId": "...",
@@ -63,6 +63,7 @@ or error message) — never a token, presigned URL, or full response/receipt bod
 | Event | Emitted from | Meaning |
 |---|---|---|
 | `login` | `AuthService` (`/login` handler) | A device logged in; `outcome` ok/error. |
+| `catalog-publish` | `CatalogPublisher` | Config/catalog was (re)written to the Mediator — the initial startup write if missing, or the periodic overwrite; `outcome` ok/error. |
 | `inbox-poll` | `InboxProcessor` | A poll of `/inbox/` ran; `detail` carries how many objects were found. |
 | `receipt-processed` | `InboxProcessor` | A receipt object was read and parsed; `outcome` ok/error (e.g. invalid clientId/receiptId format). |
 | `receipt-archived` | `InboxProcessor` | A receipt was copied to `/archive/` and removed from `/inbox/`; `outcome` ok, or error/warning per the existing copy-then-delete handling in `docs/decision/inbox-processing-model.md`. |

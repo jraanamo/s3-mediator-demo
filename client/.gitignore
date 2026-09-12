@@ -3,3 +3,6 @@
 
 # Ignore Gradle build output directory
 build
+
+# Generated per-instance client state (see docs/decision/client-identity.md)
+client.properties

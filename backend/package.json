@@ -1,0 +1,18 @@
+{
+  "name": "arch26-demo-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.687.0",
+    "@aws-sdk/s3-request-presigner": "^3.687.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

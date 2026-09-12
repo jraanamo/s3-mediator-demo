@@ -85,6 +85,7 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /
 
 ```
 PORT=3000
+BACKEND_URL=http://localhost:3000
 JWT_SECRET=...
 JWT_EXPIRY_SECONDS=3600
 DEVICE_IDS=device-1,device-2,device-3

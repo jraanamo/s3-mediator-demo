@@ -62,6 +62,29 @@
   }
   header h1 { font-size: 1.6rem; margin: 0 0 10px; letter-spacing: -0.01em; }
   header p { color: var(--muted); line-height: 1.55; margin: 0 0 8px; max-width: 72ch; }
+  .components {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 4px 0 16px;
+  }
+  .component-card {
+    flex: 1 1 220px;
+    min-width: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .component-card.client { border-left-color: var(--client-color); }
+  .component-card.mediator { border-left-color: var(--mediator-color); }
+  .component-card.backend { border-left-color: var(--backend-color); }
+  .component-card h3 { font-size: 0.9rem; margin: 0 0 6px; }
+  .component-card.client h3 { color: var(--client-color); }
+  .component-card.mediator h3 { color: var(--mediator-color); }
+  .component-card.backend h3 { color: var(--backend-color); }
+  .component-card p { margin: 0; font-size: 0.85rem; max-width: none; }
   main {
     max-width: 1180px;
     margin: 0 auto;
@@ -156,6 +179,28 @@
     carries the bulk of the traffic — config/catalog downloads and receipt uploads — while the
     Backend is only touched briefly to log in and to hand out short-lived upload URLs.
   </p>
+  <div class="components">
+    <div class="component-card client">
+      <h3>POS Client</h3>
+      <p>A Java application standing in for a real point-of-sale terminal. It consumes configuration
+        and price catalog data, and produces receipts. In this demo it runs headless, simulating a
+        device: logging in, polling for updates, and periodically generating and uploading synthetic
+        receipts on its own.</p>
+    </div>
+    <div class="component-card mediator">
+      <h3>Mediator</h3>
+      <p>An S3-compatible object storage bucket on UpCloud. It's the detachment point of this
+        architecture — config/catalog live here for the client to read directly, and uploaded
+        receipts pass through an inbox before being archived. Almost all traffic in this demo flows
+        through it rather than hitting the Backend.</p>
+    </div>
+    <div class="component-card backend">
+      <h3>Backend</h3>
+      <p>A Node.js/Fastify server. It owns the tenant's configuration and catalog, issues short-lived
+        login tokens and upload URLs, and processes receipts out of the Mediator's inbox. In this
+        demo it's deliberately thin, touched only to bootstrap a session or hand out an upload URL.</p>
+    </div>
+  </div>
   <p>This page shows that traffic live. Nothing below is stored — it's activity observed since you opened this page.</p>
 </header>
 <main>

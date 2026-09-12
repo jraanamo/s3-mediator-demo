@@ -14,7 +14,8 @@ public class Main {
     private static final Logger LOG = LogManager.getLogger(Main.class);
 
     public static void main(String[] args) throws Exception {
-        ClientProperties props = ClientProperties.loadOrCreate(Path.of("client.properties"));
+        Path propertiesFile = args.length > 0 ? Path.of(args[0]) : Path.of("client.properties");
+        ClientProperties props = ClientProperties.loadOrCreate(propertiesFile);
         String clientId = props.clientId();
         LOG.info("starting POS client simulator, client.id={}", clientId);
 

@@ -42,7 +42,13 @@ All state (JWT, config, catalog, receipt queue) is in-memory only. A process res
 
 ## Configuration
 
-Single file, `client.properties`, in the client working directory:
+Single file, `client.properties`, in the client working directory (or a path given as the first CLI
+argument, e.g. `client instance-2.properties`, to run multiple instances from one directory). Running
+the same built client from different working directories — or with different argument filenames —
+runs independent instances without copying any source; each gets its own generated `client.id`.
+`client.sh` at the repo root is a convenience launcher: run it from whatever directory you want that
+instance's `client.properties` to live in (it builds the client once via Gradle if needed, then runs
+the already-built binary from wherever it was invoked).
 
 ```properties
 # client.id is generated and written here on first run if left blank

@@ -16,6 +16,8 @@
     --accent: #3a63f0;
     --ok: #1f9d55;
     --error: #d1373f;
+    --warn: #9a6b00;
+    --warn-bg: #fff3d6;
     --arrow: #5b5f6b;
 
     --client-color: #3a63f0;
@@ -32,6 +34,8 @@
       --accent: #7c98ff;
       --ok: #3fbd72;
       --error: #ef5a62;
+      --warn: #f0b93d;
+      --warn-bg: #3a2f10;
       --arrow: #b0b3bf;
 
       --client-color: #7c98ff;
@@ -186,6 +190,30 @@
   #conn-status { font-weight: 700; text-transform: none; letter-spacing: normal; }
   #conn-status.connected { color: var(--ok); }
   #conn-status.disconnected { color: var(--error); }
+
+  .alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .alert p { margin: 0; }
+  .alert button {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 0 8px;
+    margin-left: auto;
+  }
 </style>
 </head>
 <body>
@@ -224,6 +252,13 @@
   </div>
 </aside>
 <div class="main-col">
+  <div id="reconnect-alert" class="alert" hidden>
+    <p>The connection to the Backend was lost and has just reconnected. This page doesn't replay
+      missed events, so anything that happened during the gap wasn't seen — counters and lists below
+      have been reset to avoid showing misleading totals.</p>
+    <button id="reconnect-alert-dismiss" aria-label="Dismiss">&times;</button>
+  </div>
+
   <div class="panel">
     <h2>Live sequence <span id="conn-status" class="disconnected">connecting…</span></h2>
     <div class="legend">
@@ -352,12 +387,33 @@
   const statSent = document.getElementById('stat-sent');
   const statReceived = document.getElementById('stat-received');
   const statArchived = document.getElementById('stat-archived');
+  const reconnectAlert = document.getElementById('reconnect-alert');
+  const reconnectAlertDismiss = document.getElementById('reconnect-alert-dismiss');
   const clients = new Map();
   const MAX_FEED = 100;
   const MAX_CLIENTS = 20;
   let sentCount = 0;
   let receivedCount = 0;
   let archivedCount = 0;
+  let everConnected = false;
+  let missedEvents = false;
+
+  reconnectAlertDismiss.addEventListener('click', function () {
+    reconnectAlert.hidden = true;
+  });
+
+  function resetState() {
+    sentCount = 0;
+    receivedCount = 0;
+    archivedCount = 0;
+    statSent.textContent = '0';
+    statReceived.textContent = '0';
+    statArchived.textContent = '0';
+    clients.clear();
+    renderClients();
+    feed.innerHTML = '<li class="empty-hint">Waiting for events…</li>';
+    reconnectAlert.hidden = false;
+  }
 
   const edgeForType = {
     'login': 'edge-client-backend',
@@ -449,10 +505,18 @@
   source.onopen = function () {
     connStatus.textContent = 'connected';
     connStatus.className = 'connected';
+    // Only a genuine reconnect (we were connected before, then dropped) means events
+    // could have been missed — the very first connection has nothing to miss yet.
+    if (everConnected && missedEvents) {
+      resetState();
+    }
+    everConnected = true;
+    missedEvents = false;
   };
   source.onerror = function () {
     connStatus.textContent = 'disconnected';
     connStatus.className = 'disconnected';
+    missedEvents = true;
   };
   source.onmessage = function (e) {
     try {

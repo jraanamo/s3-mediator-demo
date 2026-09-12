@@ -23,7 +23,10 @@ raw Node response (`reply.raw`) — Fastify has no built-in SSE helper, but none
 one-way stream. The Backend keeps an in-memory `Set` of connected response streams and writes every
 broadcast event to all of them. On disconnect, the stream is removed from the set.
 
-No replay: a browser connecting now only sees events from that point on.
+No replay: a browser connecting now only sees events from that point on. Because of this, the page
+distinguishes its *first* connection from a *reconnect* (EventSource's own auto-retry after a drop):
+on a genuine reconnect it shows a dismissible alert and resets its counters/lists, rather than
+silently continuing to add to totals that may have missed events during the gap.
 
 ### `POST /monitor/events`
 

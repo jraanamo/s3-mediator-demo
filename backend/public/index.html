@@ -221,6 +221,10 @@
     <h2>Session totals</h2>
     <dl class="stats">
       <div class="stat-tile">
+        <dt>Receipts sent</dt>
+        <dd id="stat-sent">0</dd>
+      </div>
+      <div class="stat-tile">
         <dt>Receipts received</dt>
         <dd id="stat-received">0</dd>
       </div>
@@ -238,11 +242,13 @@
   const feed = document.getElementById('feed-list');
   const clientsList = document.getElementById('clients-list');
   const connStatus = document.getElementById('conn-status');
+  const statSent = document.getElementById('stat-sent');
   const statReceived = document.getElementById('stat-received');
   const statArchived = document.getElementById('stat-archived');
   const clients = new Map();
   const MAX_FEED = 100;
   const MAX_CLIENTS = 20;
+  let sentCount = 0;
   let receivedCount = 0;
   let archivedCount = 0;
 
@@ -307,9 +313,13 @@
 
   function updateStats(evt) {
     if (evt.outcome !== 'ok') return;
-    // "received" = the Backend read a receipt out of the inbox; "archived" = it
-    // finished copying it to /archive/ and removing it from /inbox/.
-    if (evt.type === 'receipt-processed') {
+    // "sent" = the client successfully PUT a receipt to the Mediator; "received" = the
+    // Backend read it out of the inbox; "archived" = it finished copying it to
+    // /archive/ and removing it from /inbox/.
+    if (evt.type === 'receipt-uploaded') {
+      sentCount += 1;
+      statSent.textContent = String(sentCount);
+    } else if (evt.type === 'receipt-processed') {
       receivedCount += 1;
       statReceived.textContent = String(receivedCount);
     } else if (evt.type === 'receipt-archived') {

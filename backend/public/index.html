@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture 26 — Live Demo Monitor</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --border: #d8d8dc;
+    --text: #1c1c1f;
+    --muted: #6b6b74;
+    --accent: #3a63f0;
+    --ok: #1f9d55;
+    --error: #d1373f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --panel: #1f1f24;
+      --border: #33333a;
+      --text: #ececf0;
+      --muted: #9a9aa3;
+      --accent: #6d8dff;
+      --ok: #3fbd72;
+      --error: #ef5a62;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+  }
+  header h1 { font-size: 1.4rem; margin: 0 0 8px; }
+  header p { color: var(--muted); line-height: 1.5; margin: 0 0 8px; }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .panel h2 { font-size: 0.95rem; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  #diagram { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--panel); stroke: var(--border); stroke-width: 1.5; }
+  .node text { fill: var(--text); font-size: 13px; }
+  .edge { stroke: var(--border); stroke-width: 2; fill: none; }
+  .edge-label { fill: var(--muted); font-size: 11px; }
+  .edge.pulse {
+    stroke: var(--accent);
+    animation: pulse-anim 900ms ease-out;
+  }
+  @keyframes pulse-anim {
+    0% { stroke-width: 2; stroke: var(--accent); }
+    100% { stroke-width: 2; stroke: var(--border); }
+  }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
+  li {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  li:last-child { border-bottom: none; }
+  .outcome-ok { color: var(--ok); }
+  .outcome-error { color: var(--error); }
+  #conn-status { font-weight: 600; }
+  #conn-status.connected { color: var(--ok); }
+  #conn-status.disconnected { color: var(--error); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Architecture 26 — Demo</h1>
+  <p>
+    A demo of detaching POS client↔server communication via a Mediator. Instead of the POS Client
+    talking to the Backend for everything, a Mediator (S3-compatible object storage on UpCloud)
+    carries the bulk of the traffic — config/catalog downloads and receipt uploads — while the
+    Backend is only touched briefly to log in and to hand out short-lived upload URLs.
+  </p>
+  <p>This page shows that traffic live. Nothing below is stored — it's activity observed since you opened this page.</p>
+</header>
+<main>
+  <div class="panel">
+    <h2>Live architecture <span id="conn-status" class="disconnected">connecting…</span></h2>
+    <svg id="diagram" viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
+      <path id="edge-client-backend" class="edge" d="M110,60 H300"/>
+      <text class="edge-label" id="edge-client-backend-label" x="130" y="52">login</text>
+
+      <path id="edge-client-mediator" class="edge" d="M110,110 H540"/>
+      <text class="edge-label" id="edge-client-mediator-label" x="150" y="102">config/catalog · receipt upload</text>
+
+      <path id="edge-backend-mediator" class="edge" d="M400,80 V150"/>
+      <text class="edge-label" id="edge-backend-mediator-label" x="405" y="115">inbox poll · process</text>
+
+      <path id="edge-backend-archive" class="edge" d="M400,80 Q470,120 560,150"/>
+      <text class="edge-label" id="edge-backend-archive-label" x="470" y="105">archive</text>
+
+      <g class="node"><rect x="20" y="35" width="90" height="50" rx="6"/><text x="65" y="65" text-anchor="middle">POS Client(s)</text></g>
+      <g class="node"><rect x="300" y="35" width="100" height="50" rx="6"/><text x="350" y="65" text-anchor="middle">Backend</text></g>
+      <g class="node"><rect x="540" y="35" width="150" height="130" rx="6"/>
+        <text x="615" y="55" text-anchor="middle">Mediator (UpCloud)</text>
+        <rect x="555" y="65" width="120" height="26" rx="4"/><text x="615" y="82" text-anchor="middle" font-size="11">config / catalog</text>
+        <rect x="555" y="96" width="120" height="26" rx="4"/><text x="615" y="113" text-anchor="middle" font-size="11">inbox</text>
+        <rect x="555" y="127" width="120" height="26" rx="4"/><text x="615" y="144" text-anchor="middle" font-size="11">archive</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="panel">
+    <h2>Clients seen (latest 20)</h2>
+    <ul id="clients-list"></ul>
+  </div>
+
+  <div class="panel">
+    <h2>Recent events (latest 100)</h2>
+    <ul id="feed-list"></ul>
+  </div>
+</main>
+
+<script>
+(function () {
+  const feed = document.getElementById('feed-list');
+  const clientsList = document.getElementById('clients-list');
+  const connStatus = document.getElementById('conn-status');
+  const clients = new Map();
+  const MAX_FEED = 100;
+  const MAX_CLIENTS = 20;
+
+  const edgeForType = {
+    'login': 'edge-client-backend',
+    'config-check': 'edge-client-mediator',
+    'catalog-check': 'edge-client-mediator',
+    'receipt-uploaded': 'edge-client-mediator',
+    'inbox-poll': 'edge-backend-mediator',
+    'receipt-processed': 'edge-backend-mediator',
+    'receipt-archived': 'edge-backend-archive',
+  };
+
+  function pulse(edgeId, label) {
+    const el = document.getElementById(edgeId);
+    if (!el) return;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
+    const labelEl = document.getElementById(edgeId + '-label');
+    if (labelEl && label) labelEl.textContent = label;
+  }
+
+  function addFeedItem(evt) {
+    const li = document.createElement('li');
+    const outcomeClass = evt.outcome === 'error' ? 'outcome-error' : evt.outcome === 'ok' ? 'outcome-ok' : '';
+    const parts = [evt.timestamp, evt.type, '(' + evt.source + ')', evt.clientId, evt.receiptId, evt.outcome, evt.detail]
+      .filter(Boolean);
+    li.textContent = parts.join(' ');
+    if (outcomeClass) li.classList.add(outcomeClass);
+    feed.prepend(li);
+    while (feed.children.length > MAX_FEED) feed.removeChild(feed.lastChild);
+  }
+
+  function trackClient(evt) {
+    if (!evt.clientId) return;
+    if (clients.has(evt.clientId)) clients.delete(evt.clientId);
+    clients.set(evt.clientId, { lastType: evt.type, lastTime: evt.timestamp });
+    while (clients.size > MAX_CLIENTS) {
+      const oldest = clients.keys().next().value;
+      clients.delete(oldest);
+    }
+    renderClients();
+  }
+
+  function renderClients() {
+    clientsList.innerHTML = '';
+    for (const [id, info] of clients) {
+      const li = document.createElement('li');
+      li.textContent = id + ' — ' + info.lastType + ' @ ' + info.lastTime;
+      clientsList.appendChild(li);
+    }
+  }
+
+  function handleEvent(evt) {
+    addFeedItem(evt);
+    trackClient(evt);
+    const edgeId = edgeForType[evt.type];
+    if (edgeId) {
+      const label = evt.type + (evt.outcome ? ' (' + evt.outcome + ')' : '');
+      pulse(edgeId, label);
+    }
+  }
+
+  const source = new EventSource('/monitor/events');
+  source.onopen = function () {
+    connStatus.textContent = 'connected';
+    connStatus.className = 'connected';
+  };
+  source.onerror = function () {
+    connStatus.textContent = 'disconnected';
+    connStatus.className = 'disconnected';
+  };
+  source.onmessage = function (e) {
+    try {
+      handleEvent(JSON.parse(e.data));
+    } catch (err) {
+      /* ignore malformed event */
+    }
+  };
+})();
+</script>
+</body>
+</html>

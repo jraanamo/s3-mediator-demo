@@ -203,6 +203,11 @@
     font-size: 0.85rem;
     line-height: 1.4;
   }
+  /* .alert's own `display: flex` has the same specificity as the UA stylesheet's
+     [hidden] { display: none }, and author styles win ties -- so without this,
+     setting the `hidden` attribute from JS silently does nothing and the alert
+     is always visible. */
+  .alert[hidden] { display: none; }
   .alert p { margin: 0; }
   .alert button {
     background: none;

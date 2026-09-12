@@ -19,7 +19,9 @@ public class Main {
         String clientId = props.clientId();
         LOG.info("starting POS client simulator, client.id={}", clientId);
 
-        String backendUrl = props.get("backend.url", "http://localhost:3000");
+        // Strip any trailing slash(es) so backendUrl + "/login" etc. never produces a
+        // double slash (which 404s — Fastify treats "//login" as a different route).
+        String backendUrl = props.get("backend.url", "http://localhost:3000").replaceAll("/+$", "");
         JdkHttpTransport http = new JdkHttpTransport();
         AuthClient authClient = new AuthClient(backendUrl, clientId, http);
         MonitorReporter reporter = new MonitorReporter(authClient, http, backendUrl);

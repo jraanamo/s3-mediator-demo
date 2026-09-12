@@ -16,7 +16,7 @@
     --accent: #3a63f0;
     --ok: #1f9d55;
     --error: #d1373f;
-    --arrow: #9497a6;
+    --arrow: #5b5f6b;
 
     --client-color: #3a63f0;
     --mediator-color: #8b5cf6;
@@ -32,7 +32,7 @@
       --accent: #7c98ff;
       --ok: #3fbd72;
       --error: #ef5a62;
-      --arrow: #6b6d7a;
+      --arrow: #b0b3bf;
 
       --client-color: #7c98ff;
       --mediator-color: #b19bff;
@@ -121,13 +121,13 @@
   .participant.mediator text { fill: var(--mediator-color); }
   .participant.backend text { fill: var(--backend-color); }
 
-  .arrow { stroke: var(--arrow); stroke-width: 2; fill: none; }
+  .arrow { stroke: var(--arrow); stroke-width: 2.5; fill: none; }
   .arrowhead-fill { fill: var(--arrow); }
   .arrow-label { fill: var(--muted); font-size: 11.5px; text-anchor: middle; }
   .arrow.pulse { stroke: var(--accent); animation: pulse-anim 1800ms ease-out; }
   @keyframes pulse-anim {
-    0% { stroke-width: 3; stroke: var(--accent); }
-    100% { stroke-width: 2; stroke: var(--arrow); }
+    0% { stroke-width: 3.5; stroke: var(--accent); }
+    100% { stroke-width: 2.5; stroke: var(--arrow); }
   }
 
   ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }

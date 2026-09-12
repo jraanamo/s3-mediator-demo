@@ -110,6 +110,11 @@ existing logic runs:
   updating that arrow's label to the specific event type.
 - Recent-events feed: a bounded list (last ~100 events) of type/source/clientId/receiptId/outcome/
   durationMs/time.
+- Security panel (static content, in the main column): summarizes how security is actually handled
+  in this demo (presigned/short-lived credentials, id validation, secrets management, event
+  validation), what's deliberately not done (no device enrollment — see
+  [client-identity](../decision/client-identity.md)), and how a zero-trust client could be built on
+  top of this same architecture.
 - Session totals (right-hand sidebar, stacks below the main column on narrow viewports): running
   counts of receipts sent (`receipt-uploaded`), received (`receipt-processed`), and archived
   (`receipt-archived`) — all `outcome: ok` — since the page connected; reset on refresh, matching

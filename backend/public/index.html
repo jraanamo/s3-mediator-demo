@@ -100,6 +100,36 @@
     margin: 0 0 2px;
   }
   .stat-tile dd { font-size: 1.8rem; font-weight: 700; margin: 0; }
+
+  .security-subhead {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 16px 0 8px;
+  }
+  .security-subhead:first-of-type { margin-top: 0; }
+  ul.prose {
+    list-style: disc;
+    margin: 0 0 4px;
+    padding-left: 1.2em;
+    max-height: none;
+    overflow: visible;
+  }
+  ul.prose li {
+    border-bottom: none;
+    font-family: inherit;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    padding: 3px 0;
+  }
+  code {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--bg);
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -237,6 +267,49 @@
       <g class="participant mediator"><rect x="305" y="20" width="150" height="50" rx="8"/><text x="380" y="50">Mediator (UpCloud)</text></g>
       <g class="participant backend"><rect x="575" y="20" width="150" height="50" rx="8"/><text x="650" y="50">Backend</text></g>
     </svg>
+  </div>
+
+  <div class="panel">
+    <h2>Security</h2>
+    <h3 class="security-subhead">How security is handled today</h3>
+    <ul class="prose">
+      <li>The client never holds long-lived credentials for the Mediator — every access is a
+        presigned URL, scoped to one object, expiring in 10 minutes.</li>
+      <li>The Backend-issued JWT (from <code>/login</code>) is the only thing authorizing calls back
+        to the Backend itself (<code>/upload-receipts</code>, <code>/monitor/events</code>), and it
+        also expires quickly.</li>
+      <li>Every client-supplied identifier (device id, receipt id) is checked against a strict
+        allow-list pattern before it's used to build a storage path — closes off path-traversal /
+        arbitrary-write attempts.</li>
+      <li>Backend secrets (S3 keys, JWT signing secret) live only as Fly.io secrets, never committed
+        to the repo.</li>
+      <li>Monitor event reports are validated (known type, bounded field lengths, bounded request
+        size) before being broadcast to viewers.</li>
+    </ul>
+    <h3 class="security-subhead">What's deliberately not done (this is a demo)</h3>
+    <ul class="prose">
+      <li><code>/login</code> accepts any well-formed device id — there's no device enrollment or
+        allow-list, so anything can start a session claiming to be any device.</li>
+    </ul>
+    <h3 class="security-subhead">Toward a zero-trust client</h3>
+    <ul class="prose">
+      <li><strong>Real enrollment</strong>: issue each device its own credential (a client
+        certificate or pre-shared secret) when it's provisioned; <code>/login</code> verifies that
+        credential instead of trusting a self-chosen id.</li>
+      <li><strong>Scope by identity</strong>: bind presigned upload URLs to the authenticated
+        device's own path (e.g. <code>inbox/&lt;deviceId&gt;/&lt;receiptId&gt;.json</code>) so one
+        device's credential can never be used to write into another device's namespace.</li>
+      <li><strong>Continuous verification</strong>: short-lived tokens already help; a fuller
+        zero-trust posture re-checks device health/identity periodically and can revoke instantly,
+        rather than just waiting out a fixed expiry.</li>
+      <li><strong>Attestation</strong>: verify the client binary/runtime hasn't been tampered with
+        before granting it a session (code signing, remote attestation).</li>
+      <li><strong>Stronger transport</strong>: mutual TLS between client and Backend instead of
+        relying on a bearer token alone.</li>
+      <li>The core shape of this architecture already fits zero-trust well: the Backend is the
+        single policy-enforcement point, and the client never talks to the Mediator without a fresh,
+        narrowly-scoped credential issued for that one call.</li>
+    </ul>
   </div>
 
   <div class="panel">

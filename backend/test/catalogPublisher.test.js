@@ -28,6 +28,7 @@ test('ensureInitialPublish emits catalog-publish only when it actually wrote som
   assert.equal(emittedWhenMissing.length, 1);
   assert.equal(emittedWhenMissing[0].type, 'catalog-publish');
   assert.equal(emittedWhenMissing[0].outcome, 'ok');
+  assert.equal(typeof emittedWhenMissing[0].durationMs, 'number');
 
   const emittedWhenPresent = [];
   await ensureInitialPublish(store, 'https://backend.test/upload-receipts', (e) => emittedWhenPresent.push(e));
@@ -41,4 +42,5 @@ test('publish always emits a catalog-publish event', async () => {
   assert.equal(emitted.length, 1);
   assert.equal(emitted[0].type, 'catalog-publish');
   assert.equal(emitted[0].outcome, 'ok');
+  assert.equal(typeof emitted[0].durationMs, 'number');
 });

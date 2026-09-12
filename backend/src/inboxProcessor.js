@@ -8,6 +8,10 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 const noopEmit = () => {};
 
+function elapsedMs(startedAt) {
+  return Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+}
+
 function archiveKey(receipt) {
   if (!SAFE_ID_RE.test(receipt.clientId ?? '') || !SAFE_ID_RE.test(receipt.receiptId ?? '')) {
     throw new Error(`invalid clientId/receiptId in receipt: ${JSON.stringify(receipt)}`);
@@ -23,20 +27,23 @@ function archiveKey(receipt) {
 }
 
 async function processObject(store, key, log, emit) {
+  const getStartedAt = process.hrtime.bigint();
   const receipt = await store.getJson(key);
+  const getDurationMs = elapsedMs(getStartedAt);
   log(`processing receipt ${receipt.receiptId} from ${receipt.clientId}, total=${receipt.totalAmount}`);
-  emit({ type: 'receipt-processed', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok' });
+  emit({ type: 'receipt-processed', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok', durationMs: getDurationMs });
 
   const destKey = archiveKey(receipt);
+  const archiveStartedAt = process.hrtime.bigint();
   await store.copy(key, destKey);
   try {
     await store.delete(key);
-    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok' });
+    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok', durationMs: elapsedMs(archiveStartedAt) });
   } catch (err) {
     // Copy already succeeded and is idempotent (same destination key), so a
     // failed delete just means this object gets reprocessed next interval.
     log(`warning: failed to delete ${key} after archiving, will reprocess: ${err.message}`);
-    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'error', detail: 'delete failed, will retry' });
+    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'error', detail: 'delete failed, will retry', durationMs: elapsedMs(archiveStartedAt) });
   }
 }
 
@@ -46,8 +53,11 @@ async function processObject(store, key, log, emit) {
 export async function processInbox(store, pageSize, log = console.log, emit = noopEmit) {
   let continuationToken;
   let totalFound = 0;
+  let listDurationMs = 0;
   do {
+    const listStartedAt = process.hrtime.bigint();
     const { keys, nextToken } = await store.listPage(INBOX_PREFIX, continuationToken, pageSize);
+    listDurationMs += elapsedMs(listStartedAt);
     totalFound += keys.length;
     for (const key of keys) {
       try {
@@ -59,5 +69,5 @@ export async function processInbox(store, pageSize, log = console.log, emit = no
     }
     continuationToken = nextToken;
   } while (continuationToken);
-  emit({ type: 'inbox-poll', source: 'backend', outcome: 'ok', detail: `found ${totalFound} object(s)` });
+  emit({ type: 'inbox-poll', source: 'backend', outcome: 'ok', detail: `found ${totalFound} object(s)`, durationMs: listDurationMs });
 }

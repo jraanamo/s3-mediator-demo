@@ -50,13 +50,18 @@ Every event, whether Backend-observed or client-reported, has the same shape:
   "receiptId": "...",
   "outcome": "ok" | "unchanged" | "error",
   "detail": "...",
+  "durationMs": 0,
   "timestamp": "<ISO-8601, set by the Backend on receipt/emission>"
 }
 ```
 
 `receiptId` is present only for receipt-related event types; `clientId` is present for every type
 except events with no clear client owner. `detail` is a short free-text string (e.g. an HTTP status
-or error message) — never a token, presigned URL, or full response/receipt body.
+or error message) — never a token, presigned URL, or full response/receipt body. `durationMs` is the
+elapsed time (a plain number, milliseconds) of the specific network/S3 call the event represents —
+e.g. the presigned GET for a `config-check`, the PUT for a `receipt-uploaded`, the S3 writes for a
+`catalog-publish` — omitted when not measured (e.g. no clear single call, like a fully invalid
+`deviceId` at `/login`).
 
 ### Backend-observed events (no client involvement — the Backend emits these directly)
 

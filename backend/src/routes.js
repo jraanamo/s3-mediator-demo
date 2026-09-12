@@ -50,6 +50,7 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
   });
 
   app.post('/login', async (request, reply) => {
+    const startedAt = process.hrtime.bigint();
     const { deviceId } = request.body ?? {};
     if (!SAFE_ID_RE.test(deviceId ?? '')) {
       monitorHub.broadcast({ type: 'login', source: 'backend', outcome: 'error', detail: 'invalid deviceId' });
@@ -62,7 +63,8 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
       store.presignGet(CATALOG_KEY, PRESIGN_EXPIRY_SECONDS),
     ]);
 
-    monitorHub.broadcast({ type: 'login', source: 'backend', clientId: deviceId, outcome: 'ok' });
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    monitorHub.broadcast({ type: 'login', source: 'backend', clientId: deviceId, outcome: 'ok', durationMs });
 
     return {
       token,

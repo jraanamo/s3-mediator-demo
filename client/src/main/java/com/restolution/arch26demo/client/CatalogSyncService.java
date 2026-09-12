@@ -60,26 +60,30 @@ public class CatalogSyncService {
 
     private void pollOne(String name, String url, String etag, BodyHandler onChanged) throws IOException {
         String eventType = name + "-check";
+        long startedAt = System.nanoTime();
         HttpResult result = http.getConditional(url, etag);
+        long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
         if (result.status() == 304) {
             LOG.info("{} unchanged", name);
-            reporter.report(eventType, "unchanged", null, null);
+            reporter.report(eventType, "unchanged", null, null, durationMs);
             return;
         }
         if (result.status() == 401) {
             LOG.warn("{} poll got 401, forcing re-login and retrying once", name);
             authClient.invalidate();
             String freshUrl = name.equals("config") ? authClient.currentConfigUrl() : authClient.currentCatalogUrl();
+            startedAt = System.nanoTime();
             result = http.getConditional(freshUrl, etag);
+            durationMs = (System.nanoTime() - startedAt) / 1_000_000;
         }
         if (result.status() == 200) {
             onChanged.apply(result.body(), result.etag());
             LOG.info("{} changed, fetched new version", name);
-            reporter.report(eventType, "ok", null, null);
+            reporter.report(eventType, "ok", null, null, durationMs);
             return;
         }
         LOG.error("{} poll failed: HTTP {}", name, result.status());
-        reporter.report(eventType, "error", null, "HTTP " + result.status());
+        reporter.report(eventType, "error", null, "HTTP " + result.status(), durationMs);
     }
 
     private void applyConfig(String body, String etag) {

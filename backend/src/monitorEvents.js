@@ -9,6 +9,7 @@ const EVENT_TYPES = new Set([
   'catalog-publish',
 ]);
 const MAX_FIELD_LENGTH = 200;
+const MAX_DURATION_MS = 10 * 60 * 1000; // 10 minutes — generous upper bound, just to catch garbage input
 export const MAX_EVENT_BODY_BYTES = 2000;
 
 // Fields allowed on an event body, beyond the required `type`.
@@ -56,6 +57,11 @@ export function validateEvent(body) {
     const value = body[field];
     if (value !== undefined && (typeof value !== 'string' || value.length > MAX_FIELD_LENGTH)) {
       return `invalid ${field}`;
+    }
+  }
+  if (body.durationMs !== undefined) {
+    if (typeof body.durationMs !== 'number' || !Number.isFinite(body.durationMs) || body.durationMs < 0 || body.durationMs > MAX_DURATION_MS) {
+      return 'invalid durationMs';
     }
   }
   return null;

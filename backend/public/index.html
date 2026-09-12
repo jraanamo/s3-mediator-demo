@@ -231,7 +231,8 @@
     if (placeholder) placeholder.remove();
     const li = document.createElement('li');
     const outcomeClass = evt.outcome === 'error' ? 'outcome-error' : evt.outcome === 'ok' ? 'outcome-ok' : '';
-    const parts = [evt.timestamp, evt.type, '(' + evt.source + ')', evt.clientId, evt.receiptId, evt.outcome, evt.detail]
+    const durationText = typeof evt.durationMs === 'number' ? Math.round(evt.durationMs) + 'ms' : null;
+    const parts = [evt.timestamp, evt.type, '(' + evt.source + ')', evt.clientId, evt.receiptId, evt.outcome, durationText, evt.detail]
       .filter(Boolean);
     li.textContent = parts.join(' ');
     if (outcomeClass) li.classList.add(outcomeClass);

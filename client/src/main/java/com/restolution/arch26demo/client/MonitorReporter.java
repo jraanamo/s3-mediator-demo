@@ -20,6 +20,11 @@ public class MonitorReporter {
     }
 
     public void report(String type, String outcome, String receiptId, String detail) {
+        report(type, outcome, receiptId, detail, null);
+    }
+
+    /** durationMs is the elapsed time of the network call this event represents, or null if not measured. */
+    public void report(String type, String outcome, String receiptId, String detail, Long durationMs) {
         try {
             String token = authClient.currentToken();
             JSONObject body = new JSONObject()
@@ -31,6 +36,9 @@ public class MonitorReporter {
             }
             if (detail != null) {
                 body.put("detail", detail);
+            }
+            if (durationMs != null) {
+                body.put("durationMs", durationMs);
             }
             http.postJson(backendUrl + "/monitor/events", body.toString(), token);
         } catch (Exception e) {

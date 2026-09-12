@@ -218,6 +218,10 @@
     el.classList.remove('pulse');
     void el.getBBox();
     el.classList.add('pulse');
+    // .arrow.pulse sets a static stroke color, so the class itself (not just
+    // the animation) must be removed once the flash finishes, or the arrow
+    // stays lit indefinitely.
+    el.addEventListener('animationend', () => el.classList.remove('pulse'), { once: true });
     const labelEl = document.getElementById(edgeId + '-label');
     if (labelEl && label) labelEl.textContent = label;
   }

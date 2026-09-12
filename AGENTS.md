@@ -1,7 +1,11 @@
 
+
 # Architecture 26 - Demo
 
 A demonstrative project for detaching POS client communication from Resto server.
+
+Architectural and system level decisions are recorded under @docs/decision/INDEX.md
+Feature specifications are recorder under @docs/spec
 
 ## Background
 
@@ -42,6 +46,13 @@ For the sake of this demo, this mediator service will be implmented by a S3 comp
 
 ## Demo development model
 
+### SDD
+
 This demo will be generated using AI agents (you) and using SDD (Spec Driven Development). The specs are written under docs/spec. 
 
 Since this is a demo project, we never need to worry about existing clients or backwards compatibility. Everything can be deleted and rewritten.
+
+#### Decisions
+
+Every architectural *decision* we make during the process needs to be stored under /docs/decision/<decision-name>.md and an INDEX.md under /docs/decision needs to be updated
+

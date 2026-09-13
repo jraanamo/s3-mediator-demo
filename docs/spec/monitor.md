@@ -86,10 +86,11 @@ e.g. the presigned GET for a `config-check`, the PUT for a `receipt-uploaded`, t
 | Event | Reported from | Meaning |
 |---|---|---|
 | `config-check` / `catalog-check` | `CatalogSyncService` | Result of a conditional-GET poll; `outcome` unchanged (304), ok (200), or error. |
-| `receipt-uploaded` | `ReceiptUploader` | Result of a PUT to a presigned upload URL; `outcome` ok or error. |
+| `receipt-uploaded` | `ReceiptUploader` | Result of a direct S3 PUT using the device's temporary STS credentials; `outcome` ok or error. |
 
-Issuing a presigned upload URL (`/upload-receipts`) is deliberately **not** a `receipt-uploaded`
-event — that would conflate "a URL was handed out" with "the upload actually happened."
+Issuing STS upload credentials (part of `/login`'s response) is deliberately **not** a
+`receipt-uploaded` event — that would conflate "credentials were handed out" with "the upload
+actually happened."
 
 ## Client Reporting
 

@@ -229,7 +229,8 @@
     A demo of detaching POS client↔server communication via a Mediator. Instead of the POS Client
     talking to the Backend for everything, a Mediator (S3-compatible object storage on UpCloud)
     carries the bulk of the traffic — config/catalog downloads and receipt uploads — while the
-    Backend is only touched briefly to log in and to hand out short-lived upload URLs.
+    Backend is only touched briefly at login, which hands out both short-lived config/catalog URLs
+    and temporary, per-device upload credentials in one call.
   </p>
   <p>This page shows that traffic live. Nothing below is stored — it's activity observed since you opened this page.</p>
 </header>
@@ -252,8 +253,8 @@
   <div class="panel component-card backend">
     <h3>Backend</h3>
     <p>A Node.js/Fastify server. It owns the tenant's configuration and catalog, issues short-lived
-      login tokens and upload URLs, and processes receipts out of the Mediator's inbox. In this
-      demo it's deliberately thin, touched only to bootstrap a session or hand out an upload URL.</p>
+      login tokens and temporary upload credentials, and processes receipts out of the Mediator's
+      inbox. In this demo it's deliberately thin, touched only to bootstrap a session.</p>
   </div>
 </aside>
 <div class="main-col">
@@ -323,11 +324,14 @@
     <h2>Security</h2>
     <h3 class="security-subhead">How security is handled today</h3>
     <ul class="prose">
-      <li>The client never holds long-lived credentials for the Mediator — every access is a
-        presigned URL, scoped to one object, expiring in 10 minutes.</li>
+      <li>The client never holds long-lived credentials for the Mediator. Config/catalog reads use a
+        presigned URL, scoped to one object, expiring in 10 minutes. Receipt uploads use temporary
+        STS credentials (<code>AssumeRole</code> with a session policy), scoped to
+        <code>s3:PutObject</code> under that device's own <code>inbox/&lt;deviceId&gt;/*</code>
+        prefix only — one device's credential can never be used to write into another device's
+        namespace — and expiring with the JWT.</li>
       <li>The Backend-issued JWT (from <code>/login</code>) is the only thing authorizing calls back
-        to the Backend itself (<code>/upload-receipts</code>, <code>/monitor/events</code>), and it
-        also expires quickly.</li>
+        to the Backend itself (<code>/monitor/events</code>), and it also expires quickly.</li>
       <li>Every client-supplied identifier (device id, receipt id) is checked against a strict
         allow-list pattern before it's used to build a storage path — closes off path-traversal /
         arbitrary-write attempts.</li>
@@ -346,9 +350,6 @@
       <li><strong>Real enrollment</strong>: issue each device its own credential (a client
         certificate or pre-shared secret) when it's provisioned; <code>/login</code> verifies that
         credential instead of trusting a self-chosen id.</li>
-      <li><strong>Scope by identity</strong>: bind presigned upload URLs to the authenticated
-        device's own path (e.g. <code>inbox/&lt;deviceId&gt;/&lt;receiptId&gt;.json</code>) so one
-        device's credential can never be used to write into another device's namespace.</li>
       <li><strong>Continuous verification</strong>: short-lived tokens already help; a fuller
         zero-trust posture re-checks device health/identity periodically and can revoke instantly,
         rather than just waiting out a fixed expiry.</li>

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Backend is the thin, occasional direct link the POS client uses to bootstrap. It doesn't serve config/catalog or accept receipts directly — it hands out presigned URLs so the client can talk to the Mediator (S3-compatible object storage, UpCloud) directly for all bulk data exchange. The Backend also owns publishing config/catalog into the Mediator and processing uploaded receipts out of it.
+The Backend is the thin, occasional direct link the POS client uses to bootstrap. It doesn't serve config/catalog or accept receipts directly — `/login` hands out presigned GET URLs for config/catalog and temporary, prefix-scoped S3 credentials for receipt uploads, so the client talks to the Mediator (S3-compatible object storage, UpCloud) directly for all bulk data exchange thereafter. The Backend also owns publishing config/catalog into the Mediator and processing uploaded receipts out of it.
 
 Single tenant for this demo: one config, one catalog. No authorization of clients — see [client-identity](../decision/client-identity.md).
 
@@ -11,7 +11,7 @@ Single tenant for this demo: one config, one catalog. No authorization of client
 ```
 /config/config.json
 /catalog/catalog.json
-/inbox/<receipt-id>.json                                   (client PUTs here)
+/inbox/<client-id>/<receipt-id>.json                        (client PUTs here, scoped by STS credentials)
 /archive/<client-id>/<yyyy>/<mm>/<dd>/<receipt-id>.json     (after processing)
 ```
 
@@ -30,22 +30,27 @@ Accepts any `deviceId` matching `^[A-Za-z0-9_-]{1,64}$` (no registry, no secret/
   "resources": {
     "config": "<presigned GET URL for /config/config.json>",
     "catalog": "<presigned GET URL for /catalog/catalog.json>"
+  },
+  "upload": {
+    "endpoint": "<S3 endpoint>",
+    "region": "<S3 region>",
+    "bucket": "<bucket name>",
+    "keyPrefix": "inbox/<deviceId>/",
+    "accessKeyId": "...",
+    "secretAccessKey": "...",
+    "sessionToken": "...",
+    "expiration": "<ISO-8601, matches expiresAt>"
   }
 }
 ```
 
+`upload` carries temporary STS credentials (via `AssumeRole` with a session policy) scoped to `s3:PutObject` under `inbox/<deviceId>/*` only — the client uses these directly with an S3 SDK to upload receipts, no further Backend contact required until the credentials near expiry. See [client-mediator-direct-access](../decision/client-mediator-direct-access.md).
+
 Malformed `deviceId` → 400.
-
-### `POST /upload-receipts`
-
-Bearer JWT required (401 if missing/expired/invalid). Request: array of `{ "receiptId": "..." }`.
-
-Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /inbox/<receiptId>.json>" }`.
 
 ## Components
 
-- **AuthService** — implements `/login`: validates `deviceId` format, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs.
-- **UploadService** — implements `/upload-receipts`: verifies JWT, generates one presigned PUT URL per requested receipt id.
+- **AuthService** — implements `/login`: validates `deviceId` format, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs, and assumes the upload role (`assumeUploadRole`) to mint prefix-scoped temporary S3 credentials matching the JWT's lifetime.
 - **CatalogPublisher** — on startup, checks whether `/config/config.json` and `/catalog/catalog.json` exist in the bucket; if either is missing, synthesizes and writes it immediately so the client always has something to fetch. Then on `PUBLISH_INTERVAL_SECONDS`, regenerates and overwrites both objects (the resulting new ETag is what drives the client's conditional-GET polling).
 - **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). For each object: GET it, parse the receipt JSON, log a line to console (`receiptId`, `clientId`, `totalAmount`), `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<receiptId>.json` (path fields taken from the parsed receipt body), then `DeleteObject` on the inbox key. Copy-then-delete is the "transaction" boundary: if delete fails after a successful copy, the object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
 
@@ -57,7 +62,6 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /
   "storeName": "Demo Bistro",
   "currency": "EUR",
   "taxRate": 0.14,
-  "uploadReceiptsUrl": "https://backend.example.test/upload-receipts",
   "generatedAt": "<ISO-8601>"
 }
 ```
@@ -67,7 +71,7 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /
 [{ "id": "...", "name": "...", "price": 0.0 }]
 ```
 
-**Receipt** (as read from `/inbox/<receipt-id>.json`, written by the client):
+**Receipt** (as read from `/inbox/<client-id>/<receipt-id>.json`, written by the client):
 ```json
 {
   "receiptId": "<uuid>",
@@ -84,23 +88,30 @@ Response: array of `{ "receiptId": "...", "uploadUrl": "<presigned PUT URL for /
 
 ```
 PORT=3000
-BACKEND_URL=http://localhost:3000
 JWT_SECRET=...
 JWT_EXPIRY_SECONDS=3600
 S3_ENDPOINT=https://.../upcloud-endpoint
+S3_STS_ENDPOINT=https://.../upcloud-endpoint:4443/sts
 S3_REGION=...
 S3_BUCKET=...
 S3_ACCESS_KEY_ID=...
 S3_SECRET_ACCESS_KEY=...
+S3_UPLOAD_ROLE_ARN=urn:ecs:iam::<account-id>:role/<upload-role>
 PUBLISH_INTERVAL_SECONDS=300
 INBOX_POLL_INTERVAL_SECONDS=30
 INBOX_PAGE_SIZE=50
 ```
 
+`S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` are the Backend's own long-lived IAM user credentials, used for all direct S3 calls and to call `AssumeRole` against `S3_UPLOAD_ROLE_ARN`. That role is a one-time manual setup step (not part of any deploy), done once via UpCloud's IAM console or the AWS CLI pointed at UpCloud's endpoints:
+1. Create an IAM role with a trust policy allowing the Backend's IAM user to assume it.
+2. Attach an inline policy granting `s3:PutObject` on `arn:aws:s3:::<bucket>/inbox/*`.
+3. Set `S3_UPLOAD_ROLE_ARN` to that role's URN.
+
+See [client-mediator-direct-access](../decision/client-mediator-direct-access.md) for why (per-device prefix scoping via STS session policies).
+
 ## Error Handling
 
 - Malformed `deviceId` at `/login` → 400.
-- Missing/expired/invalid JWT at `/upload-receipts` → 401.
 - InboxProcessor: a copy failure is logged as an error and the object is left in the inbox for retry next interval; a delete failure after a successful copy is logged as a warning and reprocessed next interval (idempotent, no duplicate side effects beyond a repeated console log line).
 - CatalogPublisher: a failure to write config/catalog is logged as an error; startup does not crash the process, but the client will simply have nothing to fetch until the next successful publish (accepted for this demo).
 
@@ -128,5 +139,6 @@ One runnable self-check per non-trivial piece of logic, no test framework:
 
 - Node.js, Fastify.
 - `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`, configured with a custom endpoint/region for UpCloud's S3-compatible API.
+- `@aws-sdk/client-sts` for `AssumeRole`, pointed at UpCloud's dedicated STS endpoint (`S3_STS_ENDPOINT`).
 - `jsonwebtoken` for JWT issuance/verification.
 - `dotenv` for configuration.

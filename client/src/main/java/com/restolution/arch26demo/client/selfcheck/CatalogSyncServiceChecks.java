@@ -15,7 +15,10 @@ public final class CatalogSyncServiceChecks {
         FakeHttpTransport http = new FakeHttpTransport();
         http.queuePost(new HttpResult(200,
                 "{\"token\":\"t\",\"expiresAt\":\"" + Instant.now().plusSeconds(3600) + "\","
-                        + "\"resources\":{\"config\":\"http://config-url\",\"catalog\":\"http://catalog-url\"}}",
+                        + "\"resources\":{\"config\":\"http://config-url\",\"catalog\":\"http://catalog-url\"},"
+                        + "\"upload\":{\"endpoint\":\"http://s3\",\"region\":\"us-east-1\",\"bucket\":\"b\","
+                        + "\"keyPrefix\":\"inbox/client-1/\",\"accessKeyId\":\"ak\",\"secretAccessKey\":\"sk\","
+                        + "\"sessionToken\":\"st\",\"expiration\":\"" + Instant.now().plusSeconds(3600) + "\"}}",
                 null));
 
         // poll 1: both changed (200)

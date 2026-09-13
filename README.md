@@ -3,7 +3,8 @@
 A demo of detaching POS client communication from a Backend server. Instead of the POS client
 talking to the Backend directly for everything, a Mediator (S3-compatible object storage) carries
 the bulk of the traffic — config/catalog downloads and receipt uploads — while the Backend is only
-touched briefly to bootstrap (login) and to hand out short-lived upload URLs.
+touched briefly to bootstrap (`/login`), which hands out both presigned GET URLs and temporary,
+prefix-scoped S3 credentials in one call.
 
 Goals (see [AGENTS.md](AGENTS.md) for the full background): fault tolerance, no impact from peak
 loads, outsourcing uptime-sensitive parts to a managed object store, cheap to scale, and no direct
@@ -12,26 +13,31 @@ client↔server coupling.
 ## Architecture at a glance
 
 ```
- POS Client (Java)  ---- /login, /upload-receipts ---->  Backend (Node/Fastify, Fly.io)
-       |                                                        |
-       |                                                        | synthesizes config/catalog,
-       '---- presigned GET/PUT ------> Mediator (UpCloud S3) <--' processes uploaded receipts
+ POS Client (Java)  ---------------- /login -------------->  Backend (Node/Fastify, Fly.io)
+       |                                                            |
+       | presigned GET (config/catalog)                             | synthesizes config/catalog,
+       | direct PUT via temporary STS credentials (receipts)        | processes uploaded receipts
+       '----------------------------------------------> Mediator (UpCloud S3) <-'
 ```
 
-- **Client** calls `/login` once (and again near JWT expiry) to get a token plus presigned URLs for
-  config/catalog, and calls `/upload-receipts` to get a presigned URL per receipt it wants to upload.
-  Everything else — fetching config/catalog, uploading receipt bodies — goes straight to the
-  Mediator bucket over those presigned URLs.
+- **Client** calls `/login` once (and again near JWT expiry) to get a token, presigned GET URLs for
+  config/catalog, and temporary S3 credentials (via STS) scoped to its own `inbox/<clientId>/*`
+  prefix. Everything else — fetching config/catalog, uploading receipt bodies — goes straight to the
+  Mediator bucket: GETs via those presigned URLs, receipt PUTs signed directly with the STS
+  credentials using an S3 SDK. No per-upload Backend contact.
 - **Backend** owns the Mediator bucket: it synthesizes and publishes config/catalog on a timer, and
   drains/archives uploaded receipts from `/inbox/` into `/archive/` on a timer. It never talks to
-  the client except for those two endpoints.
+  the client except at `/login`.
 - **Mediator** is a single UpCloud Object Storage bucket (S3-compatible). No custom code runs there.
+
+See [client-mediator-direct-access](docs/decision/client-mediator-direct-access.md) for why (and
+what didn't work first).
 
 ## What's where
 
 | Path | What |
 |---|---|
-| `backend/` | Node/Fastify Backend — `/login`, `/upload-receipts`, catalog publishing, inbox processing. Deployed to Fly.io. |
+| `backend/` | Node/Fastify Backend — `/login`, catalog publishing, inbox processing. Deployed to Fly.io. |
 | `client/` | Java POS client simulator — Gradle project, no UI, runs on timers. |
 | `docs/spec/` | Feature specs for the backend and client (what they do, API shapes, config). |
 | `docs/decision/` | Architectural decisions made along the way, with rationale (see `INDEX.md`). |
@@ -55,6 +61,13 @@ npm start              # listens on :3000
 bucket to already exist (the Backend never creates one — see `docs/decision`). On startup, if
 `config/config.json` / `catalog/catalog.json` are missing from the bucket, the Backend synthesizes
 and writes them immediately so a client always has something to fetch.
+
+**One-time IAM setup** (not part of any deploy — do this once per bucket, before first run): create
+an IAM role in UpCloud's IAM/STS console (or via the AWS CLI pointed at UpCloud's endpoints) with a
+trust policy allowing the Backend's own IAM user to assume it, and an inline policy granting
+`s3:PutObject` on `arn:aws:s3:::<bucket>/inbox/*`. Set that role's URN as `S3_UPLOAD_ROLE_ARN`, and
+the bucket's dedicated STS endpoint (from UpCloud's "Get service details" API, `sts_url`) as
+`S3_STS_ENDPOINT`. See [client-mediator-direct-access](docs/decision/client-mediator-direct-access.md).
 
 ### Deploying the Backend
 

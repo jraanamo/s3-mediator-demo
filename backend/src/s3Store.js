@@ -8,6 +8,7 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { config } from './config.js';
 
 async function streamToString(stream) {
@@ -24,6 +25,14 @@ export function createS3Store() {
     endpoint: config.s3.endpoint,
     region: config.s3.region,
     forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.s3.accessKeyId,
+      secretAccessKey: config.s3.secretAccessKey,
+    },
+  });
+  const stsClient = new STSClient({
+    endpoint: config.s3.stsEndpoint,
+    region: config.s3.region,
     credentials: {
       accessKeyId: config.s3.accessKeyId,
       secretAccessKey: config.s3.secretAccessKey,
@@ -85,8 +94,35 @@ export function createS3Store() {
       return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: expiresInSeconds });
     },
 
-    async presignPut(key, expiresInSeconds) {
-      return getSignedUrl(client, new PutObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: expiresInSeconds });
+    // Temporary, auto-expiring credentials scoped (via an inline session
+    // policy) to s3:PutObject under `prefix` only. Lets the client sign and
+    // PUT directly to the Mediator itself for the life of the credential, no
+    // per-upload Backend contact. See docs/decision/client-mediator-direct-access.md.
+    //
+    // Requires a pre-created IAM role (S3_UPLOAD_ROLE_ARN) whose own policy
+    // is at least as broad as `prefix` (the session policy can only narrow,
+    // never widen, the role's own permissions) and whose trust policy allows
+    // this Backend's IAM user to assume it. sessionName must be 2-64 chars
+    // per UpCloud's STS validation, hence the "device-" prefix.
+    async assumeUploadRole(prefix, durationSeconds, sessionName) {
+      const sessionPolicy = {
+        Version: '2012-10-17',
+        Statement: [
+          { Effect: 'Allow', Action: 's3:PutObject', Resource: `arn:aws:s3:::${bucket}/${prefix}*` },
+        ],
+      };
+      const result = await stsClient.send(new AssumeRoleCommand({
+        RoleArn: config.s3.uploadRoleArn,
+        RoleSessionName: `device-${sessionName}`,
+        DurationSeconds: durationSeconds,
+        Policy: JSON.stringify(sessionPolicy),
+      }));
+      return {
+        accessKeyId: result.Credentials.AccessKeyId,
+        secretAccessKey: result.Credentials.SecretAccessKey,
+        sessionToken: result.Credentials.SessionToken,
+        expiration: result.Credentials.Expiration.toISOString(),
+      };
     },
   };
 }

@@ -15,19 +15,18 @@ const pageHtml = readFileSync(join(__dirname, '..', 'public', 'index.html'), 'ut
 const app = Fastify({ logger: true });
 const store = createS3Store();
 const monitorHub = createMonitorHub();
-const uploadReceiptsUrl = `${config.backendUrl}/upload-receipts`;
 
 registerRoutes(app, store, monitorHub, pageHtml);
 
 try {
-  await ensureInitialPublish(store, uploadReceiptsUrl, (event) => monitorHub.broadcast(event));
+  await ensureInitialPublish(store, (event) => monitorHub.broadcast(event));
 } catch (err) {
   app.log.error(err, 'initial catalog publish failed; clients will have nothing to fetch until this succeeds');
   monitorHub.broadcast({ type: 'catalog-publish', source: 'backend', outcome: 'error', detail: err.message });
 }
 
 setInterval(() => {
-  publish(store, uploadReceiptsUrl, (event) => monitorHub.broadcast(event)).catch((err) => {
+  publish(store, (event) => monitorHub.broadcast(event)).catch((err) => {
     app.log.error(err, 'catalog publish failed');
     monitorHub.broadcast({ type: 'catalog-publish', source: 'backend', outcome: 'error', detail: err.message });
   });

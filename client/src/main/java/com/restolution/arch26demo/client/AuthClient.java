@@ -26,6 +26,7 @@ public class AuthClient {
     private Instant expiresAt = Instant.EPOCH;
     private String configUrl;
     private String catalogUrl;
+    private UploadCredentials upload;
 
     public AuthClient(String backendUrl, String clientId, HttpTransport http) {
         this.backendUrl = backendUrl;
@@ -46,6 +47,11 @@ public class AuthClient {
     public synchronized String currentCatalogUrl() throws IOException {
         ensureValid();
         return catalogUrl;
+    }
+
+    public synchronized UploadCredentials currentUpload() throws IOException {
+        ensureValid();
+        return upload;
     }
 
     /** Call after any Mediator/Backend call returns 401 to force a fresh login before retrying. */
@@ -78,6 +84,10 @@ public class AuthClient {
         JSONObject resources = response.getJSONObject("resources");
         configUrl = resources.getString("config");
         catalogUrl = resources.getString("catalog");
+        JSONObject u = response.getJSONObject("upload");
+        upload = new UploadCredentials(u.getString("endpoint"), u.getString("region"), u.getString("bucket"),
+                u.getString("keyPrefix"), u.getString("accessKeyId"), u.getString("secretAccessKey"),
+                u.getString("sessionToken"), Instant.parse(u.getString("expiration")));
         LOG.info("login succeeded, token expires at {}", expiresAt);
     }
 }

@@ -1,26 +1,22 @@
 package com.restolution.arch26demo.client;
 
-import com.restolution.arch26demo.client.http.HttpResult;
-import com.restolution.arch26demo.client.http.HttpTransport;
 import com.restolution.arch26demo.client.model.Receipt;
+import com.restolution.arch26demo.client.s3.ReceiptSink;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Batches queued receipts through /upload-receipts and PUTs each body to its
- * presigned URL, retrying failures with exponential backoff and dropping a
- * receipt once retry.max-attempts is exceeded.
+ * Uploads queued receipts directly to the Mediator using the prefix-scoped
+ * STS credentials handed out by /login, retrying failures with exponential
+ * backoff and dropping a receipt once retry.max-attempts is exceeded. No
+ * per-upload Backend contact — see docs/decision/client-mediator-direct-access.md.
  */
 public class ReceiptUploader {
     private static final Logger LOG = LogManager.getLogger(ReceiptUploader.class);
@@ -29,9 +25,8 @@ public class ReceiptUploader {
     }
 
     private final AuthClient authClient;
-    private final HttpTransport http;
+    private final ReceiptSink sink;
     private final MonitorReporter reporter;
-    private final String backendUrl;
     private final int batchSize;
     private final long baseDelaySeconds;
     private final long maxDelaySeconds;
@@ -39,12 +34,11 @@ public class ReceiptUploader {
 
     private final Deque<QueuedReceipt> queue = new ArrayDeque<>();
 
-    public ReceiptUploader(AuthClient authClient, HttpTransport http, MonitorReporter reporter, String backendUrl,
+    public ReceiptUploader(AuthClient authClient, ReceiptSink sink, MonitorReporter reporter,
                             int batchSize, long baseDelaySeconds, long maxDelaySeconds, int maxAttempts) {
         this.authClient = authClient;
-        this.http = http;
+        this.sink = sink;
         this.reporter = reporter;
-        this.backendUrl = backendUrl;
         this.batchSize = batchSize;
         this.baseDelaySeconds = baseDelaySeconds;
         this.maxDelaySeconds = maxDelaySeconds;
@@ -65,60 +59,31 @@ public class ReceiptUploader {
             return;
         }
 
+        UploadCredentials upload;
         try {
-            JSONArray requestArray = new JSONArray();
-            batch.forEach(q -> requestArray.put(new JSONObject().put("receiptId", q.receipt().receiptId())));
-
-            String token = authClient.currentToken();
-            HttpResult result = http.postJson(backendUrl + "/upload-receipts", requestArray.toString(), token);
-            if (result.status() == 401) {
-                LOG.warn("upload-receipts got 401, forcing re-login and retrying once");
-                authClient.invalidate();
-                token = authClient.currentToken();
-                result = http.postJson(backendUrl + "/upload-receipts", requestArray.toString(), token);
-            }
-            if (result.status() != 200) {
-                LOG.error("upload-receipts failed: HTTP {}", result.status());
-                batch.forEach(q -> retryOrDrop(q, null));
-                return;
-            }
-
-            Map<String, String> uploadUrls = new HashMap<>();
-            JSONArray responses = new JSONArray(result.body());
-            for (int i = 0; i < responses.length(); i++) {
-                JSONObject entry = responses.getJSONObject(i);
-                uploadUrls.put(entry.getString("receiptId"), entry.getString("uploadUrl"));
-            }
-
-            for (QueuedReceipt queued : batch) {
-                uploadOne(queued, uploadUrls.get(queued.receipt().receiptId()));
-            }
+            upload = authClient.currentUpload();
         } catch (IOException e) {
-            LOG.error("upload batch failed", e);
+            LOG.error("could not obtain upload credentials", e);
             batch.forEach(q -> retryOrDrop(q, null));
+            return;
+        }
+
+        for (QueuedReceipt queued : batch) {
+            uploadOne(queued, upload);
         }
     }
 
-    private void uploadOne(QueuedReceipt queued, String uploadUrl) {
-        if (uploadUrl == null) {
-            LOG.error("no uploadUrl returned for receipt {}", queued.receipt().receiptId());
-            retryOrDrop(queued, null);
-            return;
-        }
+    private void uploadOne(QueuedReceipt queued, UploadCredentials upload) {
+        String key = upload.keyPrefix() + queued.receipt().receiptId() + ".json";
         long startedAt = System.nanoTime();
         try {
-            HttpResult result = http.putJson(uploadUrl, queued.receipt().toJson());
+            sink.put(upload, key, queued.receipt().toJson());
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
-            if (result.status() >= 200 && result.status() < 300) {
-                LOG.info("uploaded receipt {}", queued.receipt().receiptId());
-                reporter.report("receipt-uploaded", "ok", queued.receipt().receiptId(), null, durationMs);
-            } else {
-                LOG.error("PUT failed for receipt {}: HTTP {}", queued.receipt().receiptId(), result.status());
-                retryOrDrop(queued, durationMs);
-            }
+            LOG.info("uploaded receipt {}", queued.receipt().receiptId());
+            reporter.report("receipt-uploaded", "ok", queued.receipt().receiptId(), null, durationMs);
         } catch (IOException e) {
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
-            LOG.error("PUT failed for receipt " + queued.receipt().receiptId(), e);
+            LOG.error("upload failed for receipt " + queued.receipt().receiptId(), e);
             retryOrDrop(queued, durationMs);
         }
     }

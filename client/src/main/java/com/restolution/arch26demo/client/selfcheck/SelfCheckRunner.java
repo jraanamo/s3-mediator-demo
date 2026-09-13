@@ -17,6 +17,7 @@ public final class SelfCheckRunner {
                 new NamedCheck("ClientProperties: reuses an existing client.id", ClientPropertiesChecks::reusesExistingId),
                 new NamedCheck("AuthClient: reuses token until near expiry", AuthClientChecks::reusesTokenUntilExpiry),
                 new NamedCheck("AuthClient: invalidate() forces a fresh re-login", AuthClientChecks::invalidateTriggersRelogin),
+                new NamedCheck("AuthClient: exposes upload credentials from login response", AuthClientChecks::exposesUploadCredentials),
                 new NamedCheck("CatalogSyncService: 304 is a no-op, 200 replaces state", CatalogSyncServiceChecks::conditionalGetReplacesOnlyOnChange),
                 new NamedCheck("ReceiptUploader: happy path empties the queue", ReceiptUploaderChecks::happyPathEmptiesQueue),
                 new NamedCheck("ReceiptUploader: retries with backoff then drops after max attempts", ReceiptUploaderChecks::retryBackoffThenDropAfterMaxAttempts),

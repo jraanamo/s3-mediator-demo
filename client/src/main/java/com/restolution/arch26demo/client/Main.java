@@ -2,6 +2,7 @@ package com.restolution.arch26demo.client;
 
 import com.restolution.arch26demo.client.http.JdkHttpTransport;
 import com.restolution.arch26demo.client.model.Receipt;
+import com.restolution.arch26demo.client.s3.S3ReceiptSink;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -28,7 +29,7 @@ public class Main {
         CatalogSyncService catalogSync = new CatalogSyncService(authClient, http, reporter);
         ReceiptSimulator simulator = new ReceiptSimulator(catalogSync, clientId);
         ReceiptUploader uploader = new ReceiptUploader(
-                authClient, http, reporter, backendUrl,
+                authClient, new S3ReceiptSink(), reporter,
                 props.getInt("upload.batch-size", 10),
                 props.getInt("retry.base-delay-seconds", 2),
                 props.getInt("retry.max-delay-seconds", 60),

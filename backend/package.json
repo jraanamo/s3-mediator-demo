@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.687.0",
+    "@aws-sdk/client-sts": "^3.1131.0",
     "@aws-sdk/s3-request-presigner": "^3.687.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",

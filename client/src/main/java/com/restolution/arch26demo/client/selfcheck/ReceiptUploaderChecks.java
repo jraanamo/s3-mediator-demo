@@ -17,26 +17,24 @@ public final class ReceiptUploaderChecks {
     private static HttpResult loginResponse() {
         return new HttpResult(200,
                 "{\"token\":\"t\",\"expiresAt\":\"" + Instant.now().plusSeconds(3600) + "\","
-                        + "\"resources\":{\"config\":\"http://config-url\",\"catalog\":\"http://catalog-url\"}}",
+                        + "\"resources\":{\"config\":\"http://config-url\",\"catalog\":\"http://catalog-url\"},"
+                        + "\"upload\":{\"endpoint\":\"http://s3\",\"region\":\"us-east-1\",\"bucket\":\"b\","
+                        + "\"keyPrefix\":\"inbox/client-1/\",\"accessKeyId\":\"ak\",\"secretAccessKey\":\"sk\","
+                        + "\"sessionToken\":\"st\",\"expiration\":\"" + Instant.now().plusSeconds(3600) + "\"}}",
                 null);
-    }
-
-    private static HttpResult uploadReceiptsResponse(String receiptId) {
-        return new HttpResult(200,
-                "[{\"receiptId\":\"" + receiptId + "\",\"uploadUrl\":\"http://upload-url\"}]", null);
     }
 
     public static void happyPathEmptiesQueue() throws Exception {
         FakeHttpTransport http = new FakeHttpTransport();
+        FakeReceiptSink sink = new FakeReceiptSink();
         Receipt receipt = Receipt.create("client-1", List.of(new Product("item-1", "Burger", 12.5, 1)));
 
         http.queuePost(loginResponse());
-        http.queuePost(uploadReceiptsResponse(receipt.receiptId()));
-        http.queuePut(new HttpResult(200, "", null));
+        sink.queueOk();
 
         AuthClient authClient = new AuthClient("http://backend", "client-1", http);
         MonitorReporter reporter = new MonitorReporter(authClient, http, "http://backend");
-        ReceiptUploader uploader = new ReceiptUploader(authClient, http, reporter, "http://backend", 10, 2, 60, 5);
+        ReceiptUploader uploader = new ReceiptUploader(authClient, sink, reporter, 10, 2, 60, 5);
 
         uploader.enqueue(receipt);
         uploader.uploadBatch();
@@ -46,19 +44,17 @@ public final class ReceiptUploaderChecks {
 
     public static void retryBackoffThenDropAfterMaxAttempts() throws Exception {
         FakeHttpTransport http = new FakeHttpTransport();
+        FakeReceiptSink sink = new FakeReceiptSink();
         Receipt receipt = Receipt.create("client-1", List.of(new Product("item-1", "Burger", 12.5, 1)));
 
         http.queuePost(loginResponse());
         // 3 attempts total (maxAttempts=2 means the 3rd failure exceeds it and drops).
-        for (int i = 0; i < 3; i++) {
-            http.queuePost(uploadReceiptsResponse(receipt.receiptId()));
-            http.queuePut(new HttpResult(500, "server error", null));
-        }
+        sink.queueFailure().queueFailure().queueFailure();
 
         // baseDelay/maxDelay of 0 so a retried receipt is immediately ready again on the next uploadBatch() call.
         AuthClient authClient = new AuthClient("http://backend", "client-1", http);
         MonitorReporter reporter = new MonitorReporter(authClient, http, "http://backend");
-        ReceiptUploader uploader = new ReceiptUploader(authClient, http, reporter, "http://backend", 10, 0, 0, 2);
+        ReceiptUploader uploader = new ReceiptUploader(authClient, sink, reporter, 10, 0, 0, 2);
 
         uploader.enqueue(receipt);
 

@@ -36,7 +36,7 @@ public class FakeHttpTransport implements HttpTransport {
     @Override
     public HttpResult postJson(String url, String jsonBody, String bearerToken) {
         if (url.endsWith("/monitor/events")) {
-            // Monitor reporting is a separate concern from the login/upload-receipts flows most
+            // Monitor reporting is a separate concern from the login flow most
             // checks script — don't make every check queue responses for it too.
             monitorEventCalls++;
             return new HttpResult(204, "", null);

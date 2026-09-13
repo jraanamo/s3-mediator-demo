@@ -1,6 +1,7 @@
 import { issueToken, verifyToken } from './jwt.js';
 import { CONFIG_KEY, CATALOG_KEY } from './catalogPublisher.js';
 import { validateEvent, MAX_EVENT_BODY_BYTES } from './monitorEvents.js';
+import { config } from './config.js';
 
 const PRESIGN_EXPIRY_SECONDS = 600;
 // deviceId/receiptId are client-supplied and get interpolated into S3 keys
@@ -73,10 +74,12 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
       return reply.code(400).send({ error: 'invalid deviceId' });
     }
 
-    const { token, expiresAt } = issueToken(deviceId);
-    const [configUrl, catalogUrl] = await Promise.all([
+    const uploadPrefix = `inbox/${deviceId}/`;
+    const [{ token, expiresAt }, configUrl, catalogUrl, upload] = await Promise.all([
+      issueToken(deviceId),
       store.presignGet(CONFIG_KEY, PRESIGN_EXPIRY_SECONDS),
       store.presignGet(CATALOG_KEY, PRESIGN_EXPIRY_SECONDS),
+      store.assumeUploadRole(uploadPrefix, config.jwtExpirySeconds, deviceId),
     ]);
 
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
@@ -86,28 +89,16 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
       token,
       expiresAt,
       resources: { config: configUrl, catalog: catalogUrl },
+      upload: {
+        endpoint: config.s3.endpoint,
+        region: config.s3.region,
+        bucket: config.s3.bucket,
+        keyPrefix: uploadPrefix,
+        accessKeyId: upload.accessKeyId,
+        secretAccessKey: upload.secretAccessKey,
+        sessionToken: upload.sessionToken,
+        expiration: upload.expiration,
+      },
     };
-  });
-
-  app.post('/upload-receipts', async (request, reply) => {
-    const token = bearerToken(request);
-    try {
-      verifyToken(token);
-    } catch {
-      return reply.code(401).send({ error: 'invalid or expired token' });
-    }
-
-    const receipts = request.body ?? [];
-    if (!receipts.every(({ receiptId }) => SAFE_ID_RE.test(receiptId ?? ''))) {
-      return reply.code(400).send({ error: 'invalid receiptId' });
-    }
-
-    const results = await Promise.all(
-      receipts.map(async ({ receiptId }) => ({
-        receiptId,
-        uploadUrl: await store.presignPut(`inbox/${receiptId}.json`, PRESIGN_EXPIRY_SECONDS),
-      })),
-    );
-    return results;
   });
 }

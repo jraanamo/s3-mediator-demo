@@ -9,12 +9,11 @@ const CATALOG_ITEMS = [
   { id: 'item-5', name: 'Coffee', price: 3.5 },
 ];
 
-export function synthesizeConfig(uploadReceiptsUrl) {
+export function synthesizeConfig() {
   return {
     storeName: 'Demo Bistro',
     currency: 'EUR',
     taxRate: 0.14,
-    uploadReceiptsUrl,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -31,11 +30,11 @@ function elapsedMs(startedAt) {
 
 // Writes config+catalog if missing (so the client always has something to
 // fetch), regardless of the interval below.
-export async function ensureInitialPublish(store, uploadReceiptsUrl, emit = noopEmit) {
+export async function ensureInitialPublish(store, emit = noopEmit) {
   const startedAt = process.hrtime.bigint();
   let wroteAnything = false;
   if (!(await store.exists(CONFIG_KEY))) {
-    await store.putJson(CONFIG_KEY, synthesizeConfig(uploadReceiptsUrl));
+    await store.putJson(CONFIG_KEY, synthesizeConfig());
     wroteAnything = true;
   }
   if (!(await store.exists(CATALOG_KEY))) {
@@ -49,9 +48,9 @@ export async function ensureInitialPublish(store, uploadReceiptsUrl, emit = noop
 
 // Unconditionally regenerates and overwrites both objects, changing their
 // ETag so clients polling with conditional GET see the update.
-export async function publish(store, uploadReceiptsUrl, emit = noopEmit) {
+export async function publish(store, emit = noopEmit) {
   const startedAt = process.hrtime.bigint();
-  await store.putJson(CONFIG_KEY, synthesizeConfig(uploadReceiptsUrl));
+  await store.putJson(CONFIG_KEY, synthesizeConfig());
   await store.putJson(CATALOG_KEY, synthesizeCatalog());
   emit({ type: 'catalog-publish', source: 'backend', outcome: 'ok', durationMs: elapsedMs(startedAt) });
 }

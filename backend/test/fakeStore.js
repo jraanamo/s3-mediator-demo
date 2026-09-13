@@ -21,6 +21,10 @@ export function createFakeStore() {
     async delete(key) {
       objects.delete(key);
     },
+    async deleteMany(keys) {
+      for (const key of keys) objects.delete(key);
+      return [];
+    },
     async listPage(prefix, continuationToken, maxKeys) {
       // Mirrors real S3: the token is the last key already seen ("StartAfter"),
       // not a position, so it stays valid even if earlier keys are deleted

@@ -12,7 +12,7 @@ The Backend needs S3/UpCloud credentials (endpoint, region, bucket, access key, 
 
 All Backend secrets/config are supplied as environment variables, set on Fly.io via `fly secrets set` (not baked into the image, not committed to git). Locally, the same variables come from a `.env` file (via `dotenv`), matching Node convention. Deploying and configuring secrets are independent steps: the app can be deployed to Fly.io before real S3 credentials exist — CatalogPublisher/InboxProcessor will simply fail their startup checks and log errors until the secrets are set, at which point `fly secrets set` triggers a restart that picks them up.
 
-Variables: `PORT`, `JWT_SECRET`, `JWT_EXPIRY_SECONDS`, `S3_ENDPOINT`, `S3_STS_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_UPLOAD_ROLE_ARN`, `PUBLISH_INTERVAL_SECONDS`, `INBOX_POLL_INTERVAL_SECONDS`, `INBOX_PAGE_SIZE` (see `docs/spec/backend.md` for the full list, kept in sync there as it evolves).
+Variables: `PORT`, `JWT_SECRET`, `JWT_EXPIRY_SECONDS`, `S3_ENDPOINT`, `S3_STS_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_UPLOAD_ROLE_ARN`, `PUBLISH_INTERVAL_SECONDS`, `INBOX_POLL_INTERVAL_SECONDS`, `INBOX_PAGE_SIZE`, `INBOX_CONCURRENCY` (see `docs/spec/backend.md` for the full list, kept in sync there as it evolves).
 
 ## Consequences
 

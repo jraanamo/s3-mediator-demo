@@ -33,7 +33,7 @@ setInterval(() => {
 }, config.publishIntervalSeconds * 1000);
 
 setInterval(() => {
-  processInbox(store, config.inboxPageSize, (msg) => app.log.info(msg), (event) => monitorHub.broadcast(event))
+  processInbox(store, config.inboxPageSize, (msg) => app.log.info(msg), (event) => monitorHub.broadcast(event), config.inboxConcurrency)
     .catch((err) => app.log.error(err, 'inbox processing failed'));
 }, config.inboxPollIntervalSeconds * 1000);
 

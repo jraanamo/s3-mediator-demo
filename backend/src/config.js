@@ -16,4 +16,5 @@ export const config = {
   publishIntervalSeconds: Number(process.env.PUBLISH_INTERVAL_SECONDS ?? 300),
   inboxPollIntervalSeconds: Number(process.env.INBOX_POLL_INTERVAL_SECONDS ?? 30),
   inboxPageSize: Number(process.env.INBOX_PAGE_SIZE ?? 50),
+  inboxConcurrency: Number(process.env.INBOX_CONCURRENCY ?? 20),
 };

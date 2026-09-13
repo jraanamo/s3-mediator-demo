@@ -66,16 +66,41 @@ test('processInbox emits receipt-processed and receipt-archived events, and one 
   assert.equal(events.filter((e) => e.type === 'inbox-poll').length, 1);
 });
 
+test('a partial batch-delete failure only leaves the failed key for reprocessing', async () => {
+  const store = createFakeStore();
+  await store.putJson(`${INBOX_PREFIX}r0.json`, receipt('r0'));
+  await store.putJson(`${INBOX_PREFIX}r1.json`, receipt('r1'));
+
+  const realDeleteMany = store.deleteMany;
+  store.deleteMany = async (keys) => {
+    const errors = keys
+      .filter((key) => key.endsWith('r1.json'))
+      .map((key) => ({ key, message: 'simulated delete failure' }));
+    await realDeleteMany(keys.filter((key) => !key.endsWith('r1.json')));
+    return errors;
+  };
+
+  const events = [];
+  await processInbox(store, 10, () => {}, (event) => events.push(event));
+
+  assert.ok(!(await store.exists(`${INBOX_PREFIX}r0.json`)), 'r0 (successful delete) should be gone from the inbox');
+  assert.ok(await store.exists(`${INBOX_PREFIX}r1.json`), 'r1 (failed delete) should remain in the inbox for reprocessing');
+
+  const archivedEvents = events.filter((e) => e.type === 'receipt-archived');
+  assert.equal(archivedEvents.find((e) => e.receiptId === 'r0')?.outcome, 'ok');
+  assert.equal(archivedEvents.find((e) => e.receiptId === 'r1')?.outcome, 'error');
+});
+
 test('a failed delete leaves the object for reprocessing without duplicating archive state', async () => {
   const store = createFakeStore();
   await store.putJson(`${INBOX_PREFIX}r0.json`, receipt('r0'));
 
-  const realDelete = store.delete;
+  const realDeleteMany = store.deleteMany;
   let deleteAttempts = 0;
-  store.delete = async (key) => {
+  store.deleteMany = async (keys) => {
     deleteAttempts += 1;
-    if (deleteAttempts === 1) throw new Error('simulated delete failure');
-    return realDelete(key);
+    if (deleteAttempts === 1) return keys.map((key) => ({ key, message: 'simulated delete failure' }));
+    return realDeleteMany(keys);
   };
 
   await processInbox(store, 10, () => {});

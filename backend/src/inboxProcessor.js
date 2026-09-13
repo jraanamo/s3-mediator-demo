@@ -26,7 +26,23 @@ function archiveKey(receipt) {
   return `archive/${receipt.clientId}/${yyyy}/${mm}/${dd}/${receipt.receiptId}.json`;
 }
 
-async function processObject(store, key, log, emit) {
+// Runs `worker` over `items` with at most `concurrency` in flight at once.
+// GET/COPY have no S3 bulk equivalent (one call per object), so this is what
+// actually parallelizes a page instead of processing it one object at a time.
+async function runWithConcurrency(items, concurrency, worker) {
+  let nextIndex = 0;
+  async function run() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      await worker(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+}
+
+// GET + parse + validate + COPY to the archive path. Does not delete the
+// inbox object — deletes are batched separately across the whole page.
+async function fetchAndArchive(store, key, log, emit) {
   const getStartedAt = process.hrtime.bigint();
   const receipt = await store.getJson(key);
   const getDurationMs = elapsedMs(getStartedAt);
@@ -34,23 +50,51 @@ async function processObject(store, key, log, emit) {
   emit({ type: 'receipt-processed', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok', durationMs: getDurationMs });
 
   const destKey = archiveKey(receipt);
-  const archiveStartedAt = process.hrtime.bigint();
   await store.copy(key, destKey);
-  try {
-    await store.delete(key);
-    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'ok', durationMs: elapsedMs(archiveStartedAt) });
-  } catch (err) {
-    // Copy already succeeded and is idempotent (same destination key), so a
-    // failed delete just means this object gets reprocessed next interval.
-    log(`warning: failed to delete ${key} after archiving, will reprocess: ${err.message}`);
-    emit({ type: 'receipt-archived', source: 'backend', clientId: receipt.clientId, receiptId: receipt.receiptId, outcome: 'error', detail: 'delete failed, will retry', durationMs: elapsedMs(archiveStartedAt) });
+  return { key, clientId: receipt.clientId, receiptId: receipt.receiptId };
+}
+
+// Processes one listPage() page: GET+COPY objects with bounded concurrency
+// (S3 has no bulk GET/COPY, so this is the only way to parallelize that
+// part), then deletes every successfully archived object in one batched
+// DeleteObjects call instead of one DeleteObject per receipt.
+async function processPage(store, keys, concurrency, log, emit) {
+  const archived = [];
+  await runWithConcurrency(keys, concurrency, async (key) => {
+    try {
+      archived.push(await fetchAndArchive(store, key, log, emit));
+    } catch (err) {
+      log(`error: failed to process ${key}: ${err.message}`);
+      emit({ type: 'receipt-processed', source: 'backend', outcome: 'error', detail: err.message });
+    }
+  });
+
+  if (archived.length === 0) {
+    return;
+  }
+
+  const deleteStartedAt = process.hrtime.bigint();
+  const errors = await store.deleteMany(archived.map((a) => a.key));
+  const deleteDurationMs = elapsedMs(deleteStartedAt);
+  const errorByKey = new Map(errors.map((e) => [e.key, e.message]));
+
+  for (const a of archived) {
+    const failureMessage = errorByKey.get(a.key);
+    if (failureMessage === undefined) {
+      emit({ type: 'receipt-archived', source: 'backend', clientId: a.clientId, receiptId: a.receiptId, outcome: 'ok', durationMs: deleteDurationMs });
+    } else {
+      // Copy already succeeded and is idempotent (same destination key), so a
+      // failed delete just means this object gets reprocessed next interval.
+      log(`warning: failed to delete ${a.key} after archiving, will reprocess: ${failureMessage}`);
+      emit({ type: 'receipt-archived', source: 'backend', clientId: a.clientId, receiptId: a.receiptId, outcome: 'error', detail: 'delete failed, will retry', durationMs: deleteDurationMs });
+    }
   }
 }
 
 // Drains the whole inbox, one page at a time, tolerating per-object failures
 // (a bad object is logged and left for the next interval rather than
 // aborting the rest of the page).
-export async function processInbox(store, pageSize, log = console.log, emit = noopEmit) {
+export async function processInbox(store, pageSize, log = console.log, emit = noopEmit, concurrency = 20) {
   let continuationToken;
   let totalFound = 0;
   let listDurationMs = 0;
@@ -59,14 +103,7 @@ export async function processInbox(store, pageSize, log = console.log, emit = no
     const { keys, nextToken } = await store.listPage(INBOX_PREFIX, continuationToken, pageSize);
     listDurationMs += elapsedMs(listStartedAt);
     totalFound += keys.length;
-    for (const key of keys) {
-      try {
-        await processObject(store, key, log, emit);
-      } catch (err) {
-        log(`error: failed to process ${key}: ${err.message}`);
-        emit({ type: 'receipt-processed', source: 'backend', outcome: 'error', detail: err.message });
-      }
-    }
+    await processPage(store, keys, concurrency, log, emit);
     continuationToken = nextToken;
   } while (continuationToken);
   emit({ type: 'inbox-poll', source: 'backend', outcome: 'ok', detail: `found ${totalFound} object(s)`, durationMs: listDurationMs });

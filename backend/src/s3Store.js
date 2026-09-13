@@ -5,6 +5,7 @@ import {
   HeadObjectCommand,
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -75,6 +76,31 @@ export function createS3Store() {
 
     async delete(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    },
+
+    // Batched delete (S3 DeleteObjects, up to 1000 keys per call) instead of
+    // one DeleteObject per key — the real win for InboxProcessor at scale,
+    // since GET/COPY have no bulk equivalent but DELETE does. UpCloud rejects
+    // this request without an explicit Content-MD5, which the SDK only sends
+    // when ChecksumAlgorithm is set (confirmed by live testing against the
+    // real bucket — the SDK's default checksum handling for this command
+    // silently omits it and UpCloud 400s with "Missing required header").
+    // Returns per-key errors (not thrown) so the caller can leave failed
+    // deletes for the next poll, same as a single failed DeleteObject today.
+    async deleteMany(keys) {
+      const errors = [];
+      for (let i = 0; i < keys.length; i += 1000) {
+        const chunk = keys.slice(i, i + 1000);
+        const result = await client.send(new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: chunk.map((Key) => ({ Key })) },
+          ChecksumAlgorithm: 'MD5',
+        }));
+        for (const err of result.Errors ?? []) {
+          errors.push({ key: err.Key, message: err.Message });
+        }
+      }
+      return errors;
     },
 
     async listPage(prefix, continuationToken, maxKeys) {

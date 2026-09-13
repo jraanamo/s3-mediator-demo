@@ -52,7 +52,7 @@ Malformed `deviceId` → 400.
 
 - **AuthService** — implements `/login`: validates `deviceId` format, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs, and assumes the upload role (`assumeUploadRole`) to mint prefix-scoped temporary S3 credentials matching the JWT's lifetime.
 - **CatalogPublisher** — on startup, checks whether `/config/config.json` and `/catalog/catalog.json` exist in the bucket; if either is missing, synthesizes and writes it immediately so the client always has something to fetch. Then on `PUBLISH_INTERVAL_SECONDS`, regenerates and overwrites both objects (the resulting new ETag is what drives the client's conditional-GET polling).
-- **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). For each object: GET it, parse the receipt JSON, log a line to console (`receiptId`, `clientId`, `totalAmount`), `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<receiptId>.json` (path fields taken from the parsed receipt body), then `DeleteObject` on the inbox key. Copy-then-delete is the "transaction" boundary: if delete fails after a successful copy, the object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
+- **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). Within each page, up to `INBOX_CONCURRENCY` objects are GET+parsed+copied concurrently (S3 has no bulk GET/COPY, so this is what parallelizes that part): for each object, GET it, parse the receipt JSON, log a line to console (`receiptId`, `clientId`, `totalAmount`), then `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<receiptId>.json` (path fields taken from the parsed receipt body). Once the whole page has been copied, every successfully archived key in that page is deleted from the inbox in one batched `DeleteObjects` call (up to 1000 keys per call — S3 does have a bulk delete, unlike GET/COPY) instead of one `DeleteObject` per receipt. Copy-then-delete is still the "transaction" boundary: if a key's delete fails within that batch (partial failures are reported per-key, not all-or-nothing), that object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
 
 ## Data Model
 
@@ -100,6 +100,7 @@ S3_UPLOAD_ROLE_ARN=urn:ecs:iam::<account-id>:role/<upload-role>
 PUBLISH_INTERVAL_SECONDS=300
 INBOX_POLL_INTERVAL_SECONDS=30
 INBOX_PAGE_SIZE=50
+INBOX_CONCURRENCY=20
 ```
 
 `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` are the Backend's own long-lived IAM user credentials, used for all direct S3 calls and to call `AssumeRole` against `S3_UPLOAD_ROLE_ARN`. That role is a one-time manual setup step (not part of any deploy), done once via UpCloud's IAM console or the AWS CLI pointed at UpCloud's endpoints:
@@ -112,7 +113,7 @@ See [client-mediator-direct-access](../decision/client-mediator-direct-access.md
 ## Error Handling
 
 - Malformed `deviceId` at `/login` → 400.
-- InboxProcessor: a copy failure is logged as an error and the object is left in the inbox for retry next interval; a delete failure after a successful copy is logged as a warning and reprocessed next interval (idempotent, no duplicate side effects beyond a repeated console log line).
+- InboxProcessor: a copy failure is logged as an error and the object is left in the inbox for retry next interval; a delete failure within the batched delete (per-key, doesn't affect other keys in the same batch) is logged as a warning and reprocessed next interval (idempotent, no duplicate side effects beyond a repeated console log line).
 - CatalogPublisher: a failure to write config/catalog is logged as an error; startup does not crash the process, but the client will simply have nothing to fetch until the next successful publish (accepted for this demo).
 
 ## Deployment
@@ -133,6 +134,7 @@ Fly.io has no free tier for new accounts, so the instance is not always-on: `fly
 One runnable self-check per non-trivial piece of logic, no test framework:
 - InboxProcessor: paging through a multi-page inbox listing correctly drains all objects.
 - InboxProcessor: copy-then-delete idempotency (reprocessing an object already archived doesn't error or duplicate archive entries incorrectly).
+- InboxProcessor: a partial batch-delete failure (some keys in a `DeleteObjects` call fail, others succeed) only leaves the failed keys for reprocessing.
 - CatalogPublisher: "create if missing" logic on startup vs. "already present, skip initial write" logic.
 
 ## Tech Stack

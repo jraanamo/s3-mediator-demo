@@ -226,9 +226,9 @@
   <span class="eyebrow">Architecture 26</span>
   <h1>Live Demo Monitor</h1>
   <p>
-    A demo of detaching POS client↔server communication via a Mediator. Instead of the POS Client
+    A demo of detaching client↔server communication via a Mediator. Instead of the client
     talking to the Backend for everything, a Mediator (S3-compatible object storage on UpCloud)
-    carries the bulk of the traffic — config/catalog downloads and receipt uploads — while the
+    carries the bulk of the traffic — config/catalog downloads and record uploads — while the
     Backend is only touched briefly at login, which hands out both short-lived config/catalog URLs
     and temporary, per-device upload credentials in one call.
   </p>
@@ -237,11 +237,10 @@
 <main>
 <aside class="side-col left-col">
   <div class="panel component-card client">
-    <h3>POS Client</h3>
-    <p>A Java application standing in for a real point-of-sale terminal. It consumes configuration
-      and price catalog data, and produces receipts. In this demo it runs headless, simulating a
-      device: logging in, polling for updates, and periodically generating and uploading synthetic
-      receipts on its own.</p>
+    <h3>Client</h3>
+    <p>A Java application that consumes configuration and item catalog data, and produces
+      transaction records. In this demo it runs headless, simulating a device: logging in, polling
+      for updates, and periodically generating and uploading synthetic records on its own.</p>
   </div>
   <div class="panel component-card mediator">
     <h3>Mediator</h3>
@@ -253,7 +252,7 @@
   <div class="panel component-card backend">
     <h3>Backend</h3>
     <p>A Node.js/Fastify server. It owns the tenant's configuration and catalog, issues short-lived
-      login tokens and temporary upload credentials, and processes receipts out of the Mediator's
+      login tokens and temporary upload credentials, and processes records out of the Mediator's
       inbox. In this demo it's deliberately thin, touched only to bootstrap a session.</p>
   </div>
 </aside>
@@ -268,7 +267,7 @@
   <div class="panel">
     <h2>Live sequence <span id="conn-status" class="disconnected">connecting…</span></h2>
     <div class="legend">
-      <span><i style="background: var(--client-color)"></i>POS Client(s)</span>
+      <span><i style="background: var(--client-color)"></i>Client(s)</span>
       <span><i style="background: var(--mediator-color)"></i>Mediator (UpCloud)</span>
       <span><i style="background: var(--backend-color)"></i>Backend</span>
     </div>
@@ -304,7 +303,7 @@
       <text class="arrow-label" id="edge-backend-archive-label" x="515" y="352">archive</text>
 
       <!-- participants (drawn last, on top of lifeline starts) -->
-      <g class="participant client"><rect x="35" y="20" width="150" height="50" rx="8"/><text x="110" y="50">POS Client(s)</text></g>
+      <g class="participant client"><rect x="35" y="20" width="150" height="50" rx="8"/><text x="110" y="50">Client(s)</text></g>
       <g class="participant mediator"><rect x="305" y="20" width="150" height="50" rx="8"/><text x="380" y="50">Mediator (UpCloud)</text></g>
       <g class="participant backend"><rect x="575" y="20" width="150" height="50" rx="8"/><text x="650" y="50">Backend</text></g>
     </svg>
@@ -325,14 +324,14 @@
     <h3 class="security-subhead">How security is handled today</h3>
     <ul class="prose">
       <li>The client never holds long-lived credentials for the Mediator. Config/catalog reads use a
-        presigned URL, scoped to one object, expiring in 10 minutes. Receipt uploads use temporary
+        presigned URL, scoped to one object, expiring in 10 minutes. Record uploads use temporary
         STS credentials (<code>AssumeRole</code> with a session policy), scoped to
         <code>s3:PutObject</code> under that device's own <code>inbox/&lt;deviceId&gt;/*</code>
         prefix only — one device's credential can never be used to write into another device's
         namespace — and expiring with the JWT.</li>
       <li>The Backend-issued JWT (from <code>/login</code>) is the only thing authorizing calls back
         to the Backend itself (<code>/monitor/events</code>), and it also expires quickly.</li>
-      <li>Every client-supplied identifier (device id, receipt id) is checked against a strict
+      <li>Every client-supplied identifier (device id, record id) is checked against a strict
         allow-list pattern before it's used to build a storage path — closes off path-traversal /
         arbitrary-write attempts.</li>
       <li>Backend secrets (S3 keys, JWT signing secret) live only as Fly.io secrets, never committed
@@ -369,15 +368,15 @@
     <h2>Session totals</h2>
     <dl class="stats">
       <div class="stat-tile">
-        <dt>Receipts sent</dt>
+        <dt>Records sent</dt>
         <dd id="stat-sent">0</dd>
       </div>
       <div class="stat-tile">
-        <dt>Receipts received</dt>
+        <dt>Records received</dt>
         <dd id="stat-received">0</dd>
       </div>
       <div class="stat-tile">
-        <dt>Receipts archived</dt>
+        <dt>Records archived</dt>
         <dd id="stat-archived">0</dd>
       </div>
     </dl>

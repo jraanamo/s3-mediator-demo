@@ -1,4 +1,4 @@
-# Architecture 26 — Demo
+# S3 Mediator Demo
 
 A demo of detaching client communication from a Backend server via a Mediator. Instead of the client
 talking to the Backend directly for everything, a Mediator (S3-compatible object storage) carries

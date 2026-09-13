@@ -51,9 +51,10 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FLY_ENDPOINT: ${{ secrets.FLY_ENDPOINT }}
         run: |
           gh pr comment "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
             --edit-last \
             --create-if-none \
-            --body "🚀 Deployed to https://backend-gentle-rain-7280.fly.dev (shared single instance, not an isolated preview — this is the same backend \`main\` deploys to)."
+            --body "🚀 Deployed (shared single instance, not an isolated preview — this is the same backend \`main\` deploys to)."

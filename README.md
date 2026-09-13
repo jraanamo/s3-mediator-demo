@@ -10,6 +10,13 @@ Goals (see [AGENTS.md](AGENTS.md) for the full background): fault tolerance, no 
 loads, outsourcing uptime-sensitive parts to a managed object store, cheap to scale, and no direct
 client↔server coupling.
 
+## Demo Video
+
+[![Watch the demo](https://img.shields.io/badge/Watch-Live_Demo-blue)](https://github.com/jraanamo/s3-mediator-demo/releases/download/v1.0/s3_mediator_demo.mp4)
+
+See the architecture in action: client login, config/catalog polling, record uploads, and the live
+monitor tracking all activity in real-time.
+
 ## Architecture at a glance
 
 ```

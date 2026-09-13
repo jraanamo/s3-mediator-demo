@@ -246,7 +246,7 @@
     <h3>Mediator</h3>
     <p>An S3-compatible object storage bucket on UpCloud. It's the detachment point of this
       architecture — config/catalog live here for the client to read directly, and uploaded
-      receipts pass through an inbox before being archived. Almost all traffic in this demo flows
+      records pass through an inbox before being archived. Almost all traffic in this demo flows
       through it rather than hitting the Backend.</p>
   </div>
   <div class="panel component-card backend">
@@ -294,7 +294,7 @@
       <text class="arrow-label" id="edge-client-config-label" x="245" y="202">config / catalog check</text>
 
       <line id="edge-client-inbox" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="260" x2="374" y2="260"/>
-      <text class="arrow-label" id="edge-client-inbox-label" x="245" y="252">receipt upload</text>
+      <text class="arrow-label" id="edge-client-inbox-label" x="245" y="252">record upload</text>
 
       <line id="edge-backend-inbox" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="310" x2="386" y2="310"/>
       <text class="arrow-label" id="edge-backend-inbox-label" x="515" y="302">inbox poll · process</text>

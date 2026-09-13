@@ -2,14 +2,14 @@
 
 # Architecture 26 - Demo
 
-A demonstrative project for detaching POS client communication from Resto server.
+A demonstrative project for detaching client communication from a backend server via a mediated, asynchronous architecture.
 
 Architectural and system level decisions are recorded under @docs/decision/INDEX.md
-Feature specifications are recorder under @docs/spec
+Feature specifications are recorded under @docs/spec
 
 ## Background
 
-A POS client could be the current RestoGo client, SoftPos client or the Spike project, RestoSnap. POS client is a PointOfSales application that needs configuration data and article price catalog data to operate (consumes). When a clerk or a customer interacts with POS application, the application creates receipt documents that need to be synchronzed back to server, e.g for reporting purposes (produces).
+A client application needs configuration data and a catalog of items to operate (consumes). As users interact with the application, it produces structured transaction records (receipts) that must be synchronized back to the server for reporting and analysis purposes (produces).
 
 The goals this demo, by detaching the clients from direct communication with the server, is to demonstrate a model that:
 - is highly fault tolerant
@@ -26,17 +26,17 @@ The goals this demo, by detaching the clients from direct communication with the
 
 #### Backend
 
-The server where the service customers (tenants) maintain their price catalogs. This is also where the support maintains, monitors and configures the fleet of POS clients.
+The server component that manages configuration, item catalog data, and processes incoming records from clients. This is also where the application monitors and coordinates fleet activity.
 
-For the same of this demo, the backend will be implemented as a Node application under the subdirectory: backend.
+For the sake of this demo, the backend will be implemented as a Node application under the subdirectory: backend.
 
-#### POS Client
+#### Client
 
-An imaginary client application that:
-a) consumes configuration and price catalog data
-b) produces receipts and logging data
+An application that:
+a) consumes configuration and item catalog data
+b) produces transaction records (receipts) and logging data
 
-For the sake of this demo, this client will be implemented as a Java client application under a subdirectory: client.
+For the sake of this demo, the client will be implemented as a Java application under the subdirectory: client.
 
 #### Mediator Service
 

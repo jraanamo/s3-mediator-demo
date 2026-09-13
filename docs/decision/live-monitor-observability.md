@@ -7,7 +7,7 @@ Accepted
 ## Context
 
 The demo benefits from a live view of what's actually happening: client logins, config/catalog
-checks, receipt uploads, polling, processing, and archiving. Some of these the Backend already
+checks, record uploads, polling, processing, and archiving. Some of these the Backend already
 performs itself and can observe directly; others (the client's direct calls to the Mediator) it
 physically cannot see, since they never touch the Backend.
 
@@ -16,9 +16,9 @@ physically cannot see, since they never touch the Backend.
 Host the monitor page and its event stream in the existing Node Backend — no separate service,
 database, or durable history. See [monitor spec](../spec/monitor.md) for the full design; summary:
 
-- Backend-observed activity (login, inbox poll, receipt processed, receipt archived) is emitted
+- Backend-observed activity (login, inbox poll, record processed, record archived) is emitted
   directly from the code that already does that work.
-- Client-only activity (config/catalog check, receipt upload) is reported by the Java client via a
+- Client-only activity (config/catalog check, record upload) is reported by the Java client via a
   fire-and-forget, JWT-authenticated `POST /monitor/events` call — never retried, never blocking the
   client's real work, silently dropped on failure.
 - The browser gets live updates via `GET /monitor/events` (Server-Sent Events, no library — plain

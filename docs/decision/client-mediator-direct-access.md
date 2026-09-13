@@ -6,14 +6,14 @@ Accepted (revised — see History)
 
 ## Context
 
-The whole point of this architecture is to detach the POS client from direct, constant Backend communication. The client needs config/catalog data and needs to upload receipts, but should not require standing S3/UpCloud credentials, and there's no practical way for the Mediator to push change notifications to the client.
+The whole point of this architecture is to detach the client from direct, constant Backend communication. The client needs config/catalog data and needs to upload records, but should not require standing S3/UpCloud credentials, and there's no practical way for the Mediator to push change notifications to the client.
 
-The original design (see History) still required a Backend round-trip for every batch of receipt uploads, since `/upload-receipts` had to mint a fresh presigned PUT URL per receipt. That defeats the detachment goal for the produce side: the Backend would need to be reachable continuously, not just at bootstrap.
+The original design (see History) still required a Backend round-trip for every batch of record uploads, since `/upload-records` had to mint a fresh presigned PUT URL per record. That defeats the detachment goal for the produce side: the Backend would need to be reachable continuously, not just at bootstrap.
 
 ## Decision
 
 - **Config/catalog (read side):** unchanged. `/login` returns short-lived presigned GET URLs for `/config/config.json` and `/catalog/catalog.json`. The client polls these with conditional GET (`If-None-Match` against the last seen `ETag`) on a timer, since the Mediator can't push change notifications.
-- **Receipt upload (write side):** `/login` additionally returns temporary, auto-expiring S3 credentials (via AWS STS `AssumeRole`, scoped with a session policy to `s3:PutObject` under `inbox/<deviceId>/*` only) alongside a `keyPrefix`. The client uses these credentials directly with an S3 SDK to PUT receipts to the Mediator for the life of the credential — no per-upload Backend contact, no `/upload-receipts` endpoint.
+- **Record upload (write side):** `/login` additionally returns temporary, auto-expiring S3 credentials (via AWS STS `AssumeRole`, scoped with a session policy to `s3:PutObject` under `inbox/<deviceId>/*` only) alongside a `keyPrefix`. The client uses these credentials directly with an S3 SDK to PUT records to the Mediator for the life of the credential — no per-upload Backend contact, no `/upload-records` endpoint.
 - Credential lifetime matches the JWT's (`JWT_EXPIRY_SECONDS`), so refreshing the JWT via re-login also refreshes the upload credentials.
 - This requires a pre-created IAM role (one-time setup, not per-deploy) whose own policy is at least as broad as any prefix the Backend will scope a session to, and whose trust policy allows the Backend's IAM user to assume it. The session policy passed at `AssumeRole` time can only narrow, never widen, the role's permissions — this is what enforces the per-device prefix scoping.
 
@@ -31,4 +31,4 @@ The original design (see History) still required a Backend round-trip for every 
 
 ## History
 
-Originally accepted with a simpler mechanism: the Backend minted a fresh presigned PUT URL per receipt via `/upload-receipts`, requiring a Backend call for every upload batch. Revised to the STS-based mechanism above once that limitation was identified as violating the architecture's core detachment goal.
+Originally accepted with a simpler mechanism: the Backend minted a fresh presigned PUT URL per record via `/upload-records`, requiring a Backend call for every upload batch. Revised to the STS-based mechanism above once that limitation was identified as violating the architecture's core detachment goal.

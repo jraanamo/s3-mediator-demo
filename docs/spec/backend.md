@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Backend is the thin, occasional direct link the POS client uses to bootstrap. It doesn't serve config/catalog or accept receipts directly — `/login` hands out presigned GET URLs for config/catalog and temporary, prefix-scoped S3 credentials for receipt uploads, so the client talks to the Mediator (S3-compatible object storage, UpCloud) directly for all bulk data exchange thereafter. The Backend also owns publishing config/catalog into the Mediator and processing uploaded receipts out of it.
+The Backend is the thin, occasional direct link the client uses to bootstrap. It doesn't serve config/catalog or accept records directly — `/login` hands out presigned GET URLs for config/catalog and temporary, prefix-scoped S3 credentials for record uploads, so the client talks to the Mediator (S3-compatible object storage, UpCloud) directly for all bulk data exchange thereafter. The Backend also owns publishing config/catalog into the Mediator and processing uploaded records out of it.
 
 Single tenant for this demo: one config, one catalog. No authorization of clients — see [client-identity](../decision/client-identity.md).
 
@@ -11,8 +11,8 @@ Single tenant for this demo: one config, one catalog. No authorization of client
 ```
 /config/config.json
 /catalog/catalog.json
-/inbox/<client-id>/<receipt-id>.json                        (client PUTs here, scoped by STS credentials)
-/archive/<client-id>/<yyyy>/<mm>/<dd>/<receipt-id>.json     (after processing)
+/inbox/<client-id>/<record-id>.json                        (client PUTs here, scoped by STS credentials)
+/archive/<client-id>/<yyyy>/<mm>/<dd>/<record-id>.json     (after processing)
 ```
 
 ## REST API
@@ -44,7 +44,7 @@ Accepts any `deviceId` matching `^[A-Za-z0-9_-]{1,64}$` (no registry, no secret/
 }
 ```
 
-`upload` carries temporary STS credentials (via `AssumeRole` with a session policy) scoped to `s3:PutObject` under `inbox/<deviceId>/*` only — the client uses these directly with an S3 SDK to upload receipts, no further Backend contact required until the credentials near expiry. See [client-mediator-direct-access](../decision/client-mediator-direct-access.md).
+`upload` carries temporary STS credentials (via `AssumeRole` with a session policy) scoped to `s3:PutObject` under `inbox/<deviceId>/*` only — the client uses these directly with an S3 SDK to upload records, no further Backend contact required until the credentials near expiry. See [client-mediator-direct-access](../decision/client-mediator-direct-access.md).
 
 Malformed `deviceId` → 400.
 
@@ -52,7 +52,7 @@ Malformed `deviceId` → 400.
 
 - **AuthService** — implements `/login`: validates `deviceId` format, issues JWT (`JWT_EXPIRY_SECONDS`), generates the two presigned GET URLs, and assumes the upload role (`assumeUploadRole`) to mint prefix-scoped temporary S3 credentials matching the JWT's lifetime.
 - **CatalogPublisher** — on startup, checks whether `/config/config.json` and `/catalog/catalog.json` exist in the bucket; if either is missing, synthesizes and writes it immediately so the client always has something to fetch. Then on `PUBLISH_INTERVAL_SECONDS`, regenerates and overwrites both objects (the resulting new ETag is what drives the client's conditional-GET polling).
-- **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). Within each page, up to `INBOX_CONCURRENCY` objects are GET+parsed+copied concurrently (S3 has no bulk GET/COPY, so this is what parallelizes that part): for each object, GET it, parse the receipt JSON, log a line to console (`receiptId`, `clientId`, `totalAmount`), then `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<receiptId>.json` (path fields taken from the parsed receipt body). Once the whole page has been copied, every successfully archived key in that page is deleted from the inbox in one batched `DeleteObjects` call (up to 1000 keys per call — S3 does have a bulk delete, unlike GET/COPY) instead of one `DeleteObject` per receipt. Copy-then-delete is still the "transaction" boundary: if a key's delete fails within that batch (partial failures are reported per-key, not all-or-nothing), that object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
+- **InboxProcessor** — on `INBOX_POLL_INTERVAL_SECONDS`, lists `/inbox/` via `ListObjectsV2` with paging (`INBOX_PAGE_SIZE`, following continuation tokens across the full listing each interval). Within each page, up to `INBOX_CONCURRENCY` objects are GET+parsed+copied concurrently (S3 has no bulk GET/COPY, so this is what parallelizes that part): for each object, GET it, parse the record JSON, log a line to console (key fields from the parsed record body), then `CopyObject` to `/archive/<clientId>/<yyyy>/<mm>/<dd>/<recordId>.json` (path fields taken from the parsed record body). Once the whole page has been copied, every successfully archived key in that page is deleted from the inbox in one batched `DeleteObjects` call (up to 1000 keys per call — S3 does have a bulk delete, unlike GET/COPY) instead of one `DeleteObject` per record. Copy-then-delete is still the "transaction" boundary: if a key's delete fails within that batch (partial failures are reported per-key, not all-or-nothing), that object is simply reprocessed on the next interval — the copy is idempotent (same destination key, overwritten) — logged as a warning, not a fatal error.
 
 ## Data Model
 
@@ -71,14 +71,13 @@ Malformed `deviceId` → 400.
 [{ "id": "...", "name": "...", "price": 0.0 }]
 ```
 
-**Receipt** (as read from `/inbox/<client-id>/<receipt-id>.json`, written by the client):
+**Record** (as read from `/inbox/<client-id>/<record-id>.json`, written by the client):
 ```json
 {
-  "receiptId": "<uuid>",
+  "recordId": "<uuid>",
   "clientId": "...",
-  "date": "<ISO-8601>",
-  "totalAmount": 0.0,
-  "products": [{ "id": "...", "name": "...", "price": 0.0, "quantity": 1 }]
+  "timestamp": "<ISO-8601>",
+  "data": {}
 }
 ```
 
@@ -118,7 +117,7 @@ See [client-mediator-direct-access](../decision/client-mediator-direct-access.md
 
 ## Deployment
 
-Deployed as a single Fly.io instance (one shared-cpu-1x VM, `fly scale count 1`). One instance is a deliberate choice, not just a cost-saving one: CatalogPublisher and InboxProcessor run as in-process timers with no distributed locking, so a second concurrent instance would race to publish config/catalog and drain the same inbox objects. All POS clients connect to this single Backend URL. Scaling beyond one instance is out of scope for this demo (would require moving these timers to a coordinated/single-leader scheduling model).
+Deployed as a single Fly.io instance (one shared-cpu-1x VM, `fly scale count 1`). One instance is a deliberate choice, not just a cost-saving one: CatalogPublisher and InboxProcessor run as in-process timers with no distributed locking, so a second concurrent instance would race to publish config/catalog and drain the same inbox objects. All clients connect to this single Backend URL. Scaling beyond one instance is out of scope for this demo (would require moving these timers to a coordinated/single-leader scheduling model).
 
 Fly.io has no free tier for new accounts, so the instance is not always-on: `fly.toml` allows it to scale to zero when idle (`min_machines_running = 0`) and wake on the next incoming request. See [single-backend-instance](../decision/single-backend-instance.md) for the consequences on the background timers.
 
@@ -126,7 +125,7 @@ Fly.io has no free tier for new accounts, so the instance is not always-on: `fly
 
 - Multi-tenancy.
 - Any authentication/authorization of clients — `/login` trusts whatever `deviceId` it's given (see [client-identity](../decision/client-identity.md)).
-- Any read-back/reporting API over archived receipts.
+- Any read-back/reporting API over archived records.
 - Persistent job state for InboxProcessor/CatalogPublisher (in-memory intervals only, no durable scheduling).
 
 ## Testing

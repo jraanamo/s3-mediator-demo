@@ -3,7 +3,7 @@
 ## Purpose
 
 A single page, served by the existing Backend, that both explains the demo's architecture and shows
-it running live: POS clients logging in, config/catalog being checked, receipts being uploaded,
+it running live: clients logging in, config/catalog being checked, records being uploaded,
 polled, processed, and archived. No separate service, database, or history — it's a live view for
 demonstrations, not an audit log.
 
@@ -107,10 +107,10 @@ existing logic runs:
 
 ## Page Content
 
-- Explainer text: what this demo is (detaching POS client↔server communication via a Mediator),
+- Explainer text: what this demo is (detaching client↔server communication via a Mediator),
   drawn from `AGENTS.md`/`README.md`.
 - Left-hand column (mirrors the right-hand "Session totals" sidebar): one short color-coded card per
-  component — POS Client, Mediator, Backend — naming its technology and its role in this demo. Stacks
+  component — Client, Mediator, Backend — naming its technology and its role in this demo. Stacks
   above the main column on narrow viewports.
 - Live sequence diagram: three lifelines (Client, Mediator, Backend, left-to-right), each a distinct
   color. Hand-authored static SVG (a sequence diagram fit better than a node/edge architecture

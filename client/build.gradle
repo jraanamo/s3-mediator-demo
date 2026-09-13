@@ -19,12 +19,12 @@ java {
 }
 
 application {
-    mainClass = 'com.restolution.arch26demo.client.Main'
+    mainClass = 'fi.kinetik.arch26demo.client.Main'
 }
 
 tasks.register('selfCheck', JavaExec) {
     group = 'verification'
     description = 'Runs framework-free self-checks (see docs/spec/client.md Testing section).'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'com.restolution.arch26demo.client.selfcheck.SelfCheckRunner'
+    mainClass = 'fi.kinetik.arch26demo.client.selfcheck.SelfCheckRunner'
 }

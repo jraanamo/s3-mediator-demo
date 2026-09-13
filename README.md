@@ -1,8 +1,8 @@
 # Architecture 26 — Demo
 
-A demo of detaching POS client communication from a Backend server. Instead of the POS client
+A demo of detaching client communication from a Backend server via a Mediator. Instead of the client
 talking to the Backend directly for everything, a Mediator (S3-compatible object storage) carries
-the bulk of the traffic — config/catalog downloads and receipt uploads — while the Backend is only
+the bulk of the traffic — config/catalog downloads and record uploads — while the Backend is only
 touched briefly to bootstrap (`/login`), which hands out both presigned GET URLs and temporary,
 prefix-scoped S3 credentials in one call.
 
@@ -13,17 +13,17 @@ client↔server coupling.
 ## Architecture at a glance
 
 ```
- POS Client (Java)  ---------------- /login -------------->  Backend (Node/Fastify, Fly.io)
-       |                                                            |
-       | presigned GET (config/catalog)                             | synthesizes config/catalog,
-       | direct PUT via temporary STS credentials (receipts)        | processes uploaded receipts
-       '----------------------------------------------> Mediator (UpCloud S3) <-'
+   Client (Java)  -------------------- /login ---->  Backend (Node/Fastify, Fly.io)
+       |                                                    |
+       | presigned GET (config/catalog)                    | synthesizes config/catalog,
+       | direct PUT via STS credentials (records)          | processes uploaded records
+       '----------------------------------------> Mediator (UpCloud S3) <-'
 ```
 
 - **Client** calls `/login` once (and again near JWT expiry) to get a token, presigned GET URLs for
   config/catalog, and temporary S3 credentials (via STS) scoped to its own `inbox/<clientId>/*`
-  prefix. Everything else — fetching config/catalog, uploading receipt bodies — goes straight to the
-  Mediator bucket: GETs via those presigned URLs, receipt PUTs signed directly with the STS
+  prefix. Everything else — fetching config/catalog, uploading record bodies — goes straight to the
+  Mediator bucket: GETs via those presigned URLs, record PUTs signed directly with the STS
   credentials using an S3 SDK. No per-upload Backend contact.
 - **Backend** owns the Mediator bucket: it synthesizes and publishes config/catalog on a timer, and
   drains/archives uploaded receipts from `/inbox/` into `/archive/` on a timer. It never talks to
@@ -37,8 +37,8 @@ what didn't work first).
 
 | Path | What |
 |---|---|
-| `backend/` | Node/Fastify Backend — `/login`, catalog publishing, inbox processing. Deployed to Fly.io. |
-| `client/` | Java POS client simulator — Gradle project, no UI, runs on timers. |
+| `backend/` | Node/Fastify Backend — `/login`, catalog publishing, record processing. Deployed to Fly.io. |
+| `client/` | Java client simulator — Gradle project, no UI, runs on timers. |
 | `docs/spec/` | Feature specs for the backend and client (what they do, API shapes, config). |
 | `docs/decision/` | Architectural decisions made along the way, with rationale (see `INDEX.md`). |
 | `.github/workflows/` | CI: tests + deploy-to-Fly on push to `main`. |
@@ -104,9 +104,9 @@ generated `client.id`). `client.sh` at the repo root is a shortcut for this: run
 want that instance's `client.properties` to live.
 
 ```bash
-mkdir -p clients/pos-1 clients/pos-2
-(cd clients/pos-1 && /path/to/repo/client.sh &)
-(cd clients/pos-2 && /path/to/repo/client.sh &)
+mkdir -p clients/instance-1 clients/instance-2
+(cd clients/instance-1 && /path/to/repo/client.sh &)
+(cd clients/instance-2 && /path/to/repo/client.sh &)
 ```
 
 Or run several instances from one directory by passing a different properties filename per instance:

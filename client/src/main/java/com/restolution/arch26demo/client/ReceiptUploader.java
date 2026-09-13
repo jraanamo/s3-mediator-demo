@@ -79,7 +79,7 @@ public class ReceiptUploader {
             }
             if (result.status() != 200) {
                 LOG.error("upload-receipts failed: HTTP {}", result.status());
-                batch.forEach(this::retryOrDrop);
+                batch.forEach(q -> retryOrDrop(q, null));
                 return;
             }
 
@@ -95,33 +95,36 @@ public class ReceiptUploader {
             }
         } catch (IOException e) {
             LOG.error("upload batch failed", e);
-            batch.forEach(this::retryOrDrop);
+            batch.forEach(q -> retryOrDrop(q, null));
         }
     }
 
     private void uploadOne(QueuedReceipt queued, String uploadUrl) {
         if (uploadUrl == null) {
             LOG.error("no uploadUrl returned for receipt {}", queued.receipt().receiptId());
-            retryOrDrop(queued);
+            retryOrDrop(queued, null);
             return;
         }
+        long startedAt = System.nanoTime();
         try {
             HttpResult result = http.putJson(uploadUrl, queued.receipt().toJson());
+            long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             if (result.status() >= 200 && result.status() < 300) {
                 LOG.info("uploaded receipt {}", queued.receipt().receiptId());
-                reporter.report("receipt-uploaded", "ok", queued.receipt().receiptId(), null);
+                reporter.report("receipt-uploaded", "ok", queued.receipt().receiptId(), null, durationMs);
             } else {
                 LOG.error("PUT failed for receipt {}: HTTP {}", queued.receipt().receiptId(), result.status());
-                retryOrDrop(queued);
+                retryOrDrop(queued, durationMs);
             }
         } catch (IOException e) {
+            long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             LOG.error("PUT failed for receipt " + queued.receipt().receiptId(), e);
-            retryOrDrop(queued);
+            retryOrDrop(queued, durationMs);
         }
     }
 
-    private void retryOrDrop(QueuedReceipt queued) {
-        reporter.report("receipt-uploaded", "error", queued.receipt().receiptId(), null);
+    private void retryOrDrop(QueuedReceipt queued, Long durationMs) {
+        reporter.report("receipt-uploaded", "error", queued.receipt().receiptId(), null, durationMs);
         int attempts = queued.attempts() + 1;
         if (attempts > maxAttempts) {
             LOG.error("dropping receipt {} after {} attempts", queued.receipt().receiptId(), attempts - 1);

@@ -21,6 +21,18 @@ test('validateEvent rejects an oversized field', () => {
   assert.equal(error, 'invalid detail');
 });
 
+test('validateEvent accepts a valid durationMs', () => {
+  const error = validateEvent({ type: 'login', durationMs: 42 });
+  assert.equal(error, null);
+});
+
+test('validateEvent rejects a malformed durationMs', () => {
+  assert.equal(validateEvent({ type: 'login', durationMs: '42' }), 'invalid durationMs');
+  assert.equal(validateEvent({ type: 'login', durationMs: -1 }), 'invalid durationMs');
+  assert.equal(validateEvent({ type: 'login', durationMs: Infinity }), 'invalid durationMs');
+  assert.equal(validateEvent({ type: 'login', durationMs: 999_999_999 }), 'invalid durationMs');
+});
+
 test('validateEvent rejects a non-object body', () => {
   assert.equal(validateEvent(null), 'invalid body');
   assert.equal(validateEvent('nope'), 'invalid body');

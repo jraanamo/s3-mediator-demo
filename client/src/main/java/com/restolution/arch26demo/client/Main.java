@@ -14,11 +14,14 @@ public class Main {
     private static final Logger LOG = LogManager.getLogger(Main.class);
 
     public static void main(String[] args) throws Exception {
-        ClientProperties props = ClientProperties.loadOrCreate(Path.of("client.properties"));
+        Path propertiesFile = args.length > 0 ? Path.of(args[0]) : Path.of("client.properties");
+        ClientProperties props = ClientProperties.loadOrCreate(propertiesFile);
         String clientId = props.clientId();
         LOG.info("starting POS client simulator, client.id={}", clientId);
 
-        String backendUrl = props.get("backend.url", "http://localhost:3000");
+        // Strip any trailing slash(es) so backendUrl + "/login" etc. never produces a
+        // double slash (which 404s — Fastify treats "//login" as a different route).
+        String backendUrl = props.get("backend.url", "http://localhost:3000").replaceAll("/+$", "");
         JdkHttpTransport http = new JdkHttpTransport();
         AuthClient authClient = new AuthClient(backendUrl, clientId, http);
         MonitorReporter reporter = new MonitorReporter(authClient, http, backendUrl);
@@ -42,19 +45,19 @@ public class Main {
         }, 0, props.getInt("backend.login-check-interval-seconds", 60), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(catalogSync::poll, 0,
-                props.getInt("catalog.poll-interval-seconds", 30), TimeUnit.SECONDS);
+                props.getInt("catalog.poll-interval-seconds", 60), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(() -> {
             Receipt receipt = simulator.simulate();
             if (receipt != null) {
                 uploader.enqueue(receipt);
             }
-        }, props.getInt("simulate.interval-seconds", 10),
-                props.getInt("simulate.interval-seconds", 10), TimeUnit.SECONDS);
+        }, props.getInt("simulate.interval-seconds", 5),
+                props.getInt("simulate.interval-seconds", 5), TimeUnit.SECONDS);
 
         scheduler.scheduleWithFixedDelay(uploader::uploadBatch,
-                props.getInt("upload.interval-seconds", 20),
-                props.getInt("upload.interval-seconds", 20), TimeUnit.SECONDS);
+                props.getInt("upload.interval-seconds", 10),
+                props.getInt("upload.interval-seconds", 10), TimeUnit.SECONDS);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOG.info("shutting down");

@@ -54,12 +54,15 @@ test('processInbox emits receipt-processed and receipt-archived events, and one 
   assert.ok(processed, 'a receipt-processed event should be emitted');
   assert.equal(processed.receiptId, 'r0');
   assert.equal(processed.outcome, 'ok');
+  assert.equal(typeof processed.durationMs, 'number');
 
   assert.ok(archived, 'a receipt-archived event should be emitted');
   assert.equal(archived.receiptId, 'r0');
   assert.equal(archived.outcome, 'ok');
+  assert.equal(typeof archived.durationMs, 'number');
 
   assert.ok(poll, 'exactly one inbox-poll summary event should be emitted');
+  assert.equal(typeof poll.durationMs, 'number');
   assert.equal(events.filter((e) => e.type === 'inbox-poll').length, 1);
 });
 

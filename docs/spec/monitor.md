@@ -23,7 +23,15 @@ raw Node response (`reply.raw`) — Fastify has no built-in SSE helper, but none
 one-way stream. The Backend keeps an in-memory `Set` of connected response streams and writes every
 broadcast event to all of them. On disconnect, the stream is removed from the set.
 
-No replay: a browser connecting now only sees events from that point on.
+Each connection also gets a `: keep-alive` comment line every 20s. Without it, an idle-connection
+timeout anywhere in front of the Backend (common in proxies/load balancers, including Fly's) can
+silently close a quiet SSE stream, causing the browser to reconnect repeatedly. SSE comment lines
+(starting with `:`) are ignored by `EventSource` — they never reach `onmessage`.
+
+No replay: a browser connecting now only sees events from that point on. Because of this, the page
+distinguishes its *first* connection from a *reconnect* (EventSource's own auto-retry after a drop):
+on a genuine reconnect it shows a dismissible alert and resets its counters/lists, rather than
+silently continuing to add to totals that may have missed events during the gap.
 
 ### `POST /monitor/events`
 
@@ -44,25 +52,31 @@ Every event, whether Backend-observed or client-reported, has the same shape:
 
 ```json
 {
-  "type": "login" | "config-check" | "catalog-check" | "receipt-uploaded" | "inbox-poll" | "receipt-processed" | "receipt-archived",
+  "type": "login" | "catalog-publish" | "config-check" | "catalog-check" | "receipt-uploaded" | "inbox-poll" | "receipt-processed" | "receipt-archived",
   "source": "backend" | "client",
   "clientId": "...",
   "receiptId": "...",
   "outcome": "ok" | "unchanged" | "error",
   "detail": "...",
+  "durationMs": 0,
   "timestamp": "<ISO-8601, set by the Backend on receipt/emission>"
 }
 ```
 
 `receiptId` is present only for receipt-related event types; `clientId` is present for every type
 except events with no clear client owner. `detail` is a short free-text string (e.g. an HTTP status
-or error message) — never a token, presigned URL, or full response/receipt body.
+or error message) — never a token, presigned URL, or full response/receipt body. `durationMs` is the
+elapsed time (a plain number, milliseconds) of the specific network/S3 call the event represents —
+e.g. the presigned GET for a `config-check`, the PUT for a `receipt-uploaded`, the S3 writes for a
+`catalog-publish` — omitted when not measured (e.g. no clear single call, like a fully invalid
+`deviceId` at `/login`).
 
 ### Backend-observed events (no client involvement — the Backend emits these directly)
 
 | Event | Emitted from | Meaning |
 |---|---|---|
 | `login` | `AuthService` (`/login` handler) | A device logged in; `outcome` ok/error. |
+| `catalog-publish` | `CatalogPublisher` | Config/catalog was (re)written to the Mediator — the initial startup write if missing, or the periodic overwrite; `outcome` ok/error. |
 | `inbox-poll` | `InboxProcessor` | A poll of `/inbox/` ran; `detail` carries how many objects were found. |
 | `receipt-processed` | `InboxProcessor` | A receipt object was read and parsed; `outcome` ok/error (e.g. invalid clientId/receiptId format). |
 | `receipt-archived` | `InboxProcessor` | A receipt was copied to `/archive/` and removed from `/inbox/`; `outcome` ok, or error/warning per the existing copy-then-delete handling in `docs/decision/inbox-processing-model.md`. |
@@ -94,15 +108,28 @@ existing logic runs:
 
 - Explainer text: what this demo is (detaching POS client↔server communication via a Mediator),
   drawn from `AGENTS.md`/`README.md`.
-- Live diagram: client node(s), one Backend node, and the Mediator's storage areas (config/catalog,
-  inbox, archive) inside a bounding box. Built as static SVG (laid out with help from the `archify`
-  skill for visual quality) with plain JS toggling a "pulse" class on the relevant node/edge when a
-  matching SSE event arrives, and a short label (e.g. "catalog unchanged", "receipt archived").
-  Archify's own trace-motion/export features aren't used here — only its diagram composition.
-- Recent-events feed: a bounded list (last ~100 events) of type/source/clientId/receiptId/outcome/time.
+- Left-hand column (mirrors the right-hand "Session totals" sidebar): one short color-coded card per
+  component — POS Client, Mediator, Backend — naming its technology and its role in this demo. Stacks
+  above the main column on narrow viewports.
+- Live sequence diagram: three lifelines (Client, Mediator, Backend, left-to-right), each a distinct
+  color. Hand-authored static SVG (a sequence diagram fit better than a node/edge architecture
+  diagram, which kept looking cluttered — the `archify` skill was tried but not used in the end) with
+  plain JS adding a "pulse" class to the relevant arrow when a matching SSE event arrives, and
+  updating that arrow's label to the specific event type.
+- Recent-events feed: a bounded list (last ~100 events) of type/source/clientId/receiptId/outcome/
+  durationMs/time.
+- Security panel (static content, in the main column): summarizes how security is actually handled
+  in this demo (presigned/short-lived credentials, id validation, secrets management, event
+  validation), what's deliberately not done (no device enrollment — see
+  [client-identity](../decision/client-identity.md)), and how a zero-trust client could be built on
+  top of this same architecture.
+- Session totals (right-hand sidebar, stacks below the main column on narrow viewports): running
+  counts of receipts sent (`receipt-uploaded`), received (`receipt-processed`), and archived
+  (`receipt-archived`) — all `outcome: ok` — since the page connected; reset on refresh, matching
+  the rest of the page's "no history" stance.
 - Connection indicator: whether the SSE stream is currently connected.
 - Bound the number of distinctly tracked client nodes shown (e.g. latest 20 distinct `clientId`s) so
-  the diagram doesn't grow unbounded over a long-running demo.
+  the "Clients seen" list doesn't grow unbounded over a long-running demo.
 
 ## Security / Validation
 

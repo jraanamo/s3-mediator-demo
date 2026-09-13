@@ -83,6 +83,26 @@ each step to the console.
 `./gradlew selfCheck` runs the framework-free self-checks (no JUnit — see `docs/spec/client.md`
 "Testing").
 
+### Running multiple client instances
+
+No need to copy the source per instance — build once (`./gradlew installDist`), then run the built
+binary from a different working directory per instance (each gets its own `client.properties` and
+generated `client.id`). `client.sh` at the repo root is a shortcut for this: run it from wherever you
+want that instance's `client.properties` to live.
+
+```bash
+mkdir -p clients/pos-1 clients/pos-2
+(cd clients/pos-1 && /path/to/repo/client.sh &)
+(cd clients/pos-2 && /path/to/repo/client.sh &)
+```
+
+Or run several instances from one directory by passing a different properties filename per instance:
+
+```bash
+./client.sh instance-1.properties &
+./client.sh instance-2.properties &
+```
+
 ## Everything at once, locally
 
 ```bash

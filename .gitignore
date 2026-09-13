@@ -1,2 +1,6 @@
 .worktrees/
 *~
+
+# Per-instance generated client state (see client.sh)
+clients/*/client.properties
+clients/*.properties

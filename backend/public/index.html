@@ -16,7 +16,9 @@
     --accent: #3a63f0;
     --ok: #1f9d55;
     --error: #d1373f;
-    --arrow: #9497a6;
+    --warn: #9a6b00;
+    --warn-bg: #fff3d6;
+    --arrow: #5b5f6b;
 
     --client-color: #3a63f0;
     --mediator-color: #8b5cf6;
@@ -32,7 +34,9 @@
       --accent: #7c98ff;
       --ok: #3fbd72;
       --error: #ef5a62;
-      --arrow: #6b6d7a;
+      --warn: #f0b93d;
+      --warn-bg: #3a2f10;
+      --arrow: #b0b3bf;
 
       --client-color: #7c98ff;
       --mediator-color: #b19bff;
@@ -62,12 +66,73 @@
   }
   header h1 { font-size: 1.6rem; margin: 0 0 10px; letter-spacing: -0.01em; }
   header p { color: var(--muted); line-height: 1.55; margin: 0 0 8px; max-width: 72ch; }
+  .component-card { border-left-width: 4px; }
+  .component-card.client { border-left-color: var(--client-color); }
+  .component-card.mediator { border-left-color: var(--mediator-color); }
+  .component-card.backend { border-left-color: var(--backend-color); }
+  .component-card h3 { font-size: 0.9rem; margin: 0 0 6px; }
+  .component-card.client h3 { color: var(--client-color); }
+  .component-card.mediator h3 { color: var(--mediator-color); }
+  .component-card.backend h3 { color: var(--backend-color); }
+  .component-card p { margin: 0; font-size: 0.85rem; max-width: none; }
   main {
-    max-width: 940px;
+    max-width: 1400px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) 240px;
+    align-items: start;
+    gap: 18px;
+  }
+  .main-col, .side-col {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    min-width: 0;
+  }
+  @media (max-width: 1080px) {
+    main { grid-template-columns: 1fr; }
+    .left-col { order: 2; }
+    .main-col { order: 1; }
+    .side-col:not(.left-col) { order: 3; }
+  }
+  .stats { display: flex; flex-direction: column; gap: 14px; }
+  .stat-tile dt {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 2px;
+  }
+  .stat-tile dd { font-size: 1.8rem; font-weight: 700; margin: 0; }
+
+  .security-subhead {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 16px 0 8px;
+  }
+  .security-subhead:first-of-type { margin-top: 0; }
+  ul.prose {
+    list-style: disc;
+    margin: 0 0 4px;
+    padding-left: 1.2em;
+    max-height: none;
+    overflow: visible;
+  }
+  ul.prose li {
+    border-bottom: none;
+    font-family: inherit;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    padding: 3px 0;
+  }
+  code {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--bg);
+    border-radius: 3px;
+    padding: 1px 4px;
   }
   .panel {
     background: var(--panel);
@@ -102,13 +167,13 @@
   .participant.mediator text { fill: var(--mediator-color); }
   .participant.backend text { fill: var(--backend-color); }
 
-  .arrow { stroke: var(--arrow); stroke-width: 2; fill: none; }
+  .arrow { stroke: var(--arrow); stroke-width: 2.5; fill: none; }
   .arrowhead-fill { fill: var(--arrow); }
   .arrow-label { fill: var(--muted); font-size: 11.5px; text-anchor: middle; }
-  .arrow.pulse { stroke: var(--accent); animation: pulse-anim 1000ms ease-out; }
+  .arrow.pulse { stroke: var(--accent); animation: pulse-anim 1800ms ease-out; }
   @keyframes pulse-anim {
-    0% { stroke-width: 3; stroke: var(--accent); }
-    100% { stroke-width: 2; stroke: var(--arrow); }
+    0% { stroke-width: 3.5; stroke: var(--accent); }
+    100% { stroke-width: 2.5; stroke: var(--arrow); }
   }
 
   ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
@@ -125,6 +190,35 @@
   #conn-status { font-weight: 700; text-transform: none; letter-spacing: normal; }
   #conn-status.connected { color: var(--ok); }
   #conn-status.disconnected { color: var(--error); }
+
+  .alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  /* .alert's own `display: flex` has the same specificity as the UA stylesheet's
+     [hidden] { display: none }, and author styles win ties -- so without this,
+     setting the `hidden` attribute from JS silently does nothing and the alert
+     is always visible. */
+  .alert[hidden] { display: none; }
+  .alert p { margin: 0; }
+  .alert button {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 0 8px;
+    margin-left: auto;
+  }
 </style>
 </head>
 <body>
@@ -140,6 +234,36 @@
   <p>This page shows that traffic live. Nothing below is stored — it's activity observed since you opened this page.</p>
 </header>
 <main>
+<aside class="side-col left-col">
+  <div class="panel component-card client">
+    <h3>POS Client</h3>
+    <p>A Java application standing in for a real point-of-sale terminal. It consumes configuration
+      and price catalog data, and produces receipts. In this demo it runs headless, simulating a
+      device: logging in, polling for updates, and periodically generating and uploading synthetic
+      receipts on its own.</p>
+  </div>
+  <div class="panel component-card mediator">
+    <h3>Mediator</h3>
+    <p>An S3-compatible object storage bucket on UpCloud. It's the detachment point of this
+      architecture — config/catalog live here for the client to read directly, and uploaded
+      receipts pass through an inbox before being archived. Almost all traffic in this demo flows
+      through it rather than hitting the Backend.</p>
+  </div>
+  <div class="panel component-card backend">
+    <h3>Backend</h3>
+    <p>A Node.js/Fastify server. It owns the tenant's configuration and catalog, issues short-lived
+      login tokens and upload URLs, and processes receipts out of the Mediator's inbox. In this
+      demo it's deliberately thin, touched only to bootstrap a session or hand out an upload URL.</p>
+  </div>
+</aside>
+<div class="main-col">
+  <div id="reconnect-alert" class="alert" hidden>
+    <p>The connection to the Backend was lost and has just reconnected. This page doesn't replay
+      missed events, so anything that happened during the gap wasn't seen — counters and lists below
+      have been reset to avoid showing misleading totals.</p>
+    <button id="reconnect-alert-dismiss" aria-label="Dismiss">&times;</button>
+  </div>
+
   <div class="panel">
     <h2>Live sequence <span id="conn-status" class="disconnected">connecting…</span></h2>
     <div class="legend">
@@ -147,7 +271,7 @@
       <span><i style="background: var(--mediator-color)"></i>Mediator (UpCloud)</span>
       <span><i style="background: var(--backend-color)"></i>Backend</span>
     </div>
-    <svg id="diagram" viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg">
+    <svg id="diagram" viewBox="0 0 760 390" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path class="arrowhead-fill" d="M0,0 L10,5 L0,10 z"/>
@@ -155,25 +279,28 @@
       </defs>
 
       <!-- lifelines -->
-      <line class="lifeline" x1="110" y1="70" x2="110" y2="330"/>
-      <line class="lifeline" x1="380" y1="70" x2="380" y2="330"/>
-      <line class="lifeline" x1="650" y1="70" x2="650" y2="330"/>
+      <line class="lifeline" x1="110" y1="70" x2="110" y2="380"/>
+      <line class="lifeline" x1="380" y1="70" x2="380" y2="380"/>
+      <line class="lifeline" x1="650" y1="70" x2="650" y2="380"/>
 
       <!-- messages (top to bottom) -->
       <line id="edge-client-backend" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="110" x2="644" y2="110"/>
       <text class="arrow-label" id="edge-client-backend-label" x="380" y="102">login</text>
 
-      <line id="edge-client-config" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="160" x2="374" y2="160"/>
-      <text class="arrow-label" id="edge-client-config-label" x="245" y="152">config / catalog check</text>
+      <line id="edge-backend-config" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="160" x2="386" y2="160"/>
+      <text class="arrow-label" id="edge-backend-config-label" x="515" y="152">config / catalog publish</text>
 
-      <line id="edge-client-inbox" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="210" x2="374" y2="210"/>
-      <text class="arrow-label" id="edge-client-inbox-label" x="245" y="202">receipt upload</text>
+      <line id="edge-client-config" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="210" x2="374" y2="210"/>
+      <text class="arrow-label" id="edge-client-config-label" x="245" y="202">config / catalog check</text>
 
-      <line id="edge-backend-inbox" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="260" x2="386" y2="260"/>
-      <text class="arrow-label" id="edge-backend-inbox-label" x="515" y="252">inbox poll · process</text>
+      <line id="edge-client-inbox" class="arrow" marker-end="url(#arrowhead)" x1="110" y1="260" x2="374" y2="260"/>
+      <text class="arrow-label" id="edge-client-inbox-label" x="245" y="252">receipt upload</text>
 
-      <line id="edge-backend-archive" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="310" x2="386" y2="310"/>
-      <text class="arrow-label" id="edge-backend-archive-label" x="515" y="302">archive</text>
+      <line id="edge-backend-inbox" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="310" x2="386" y2="310"/>
+      <text class="arrow-label" id="edge-backend-inbox-label" x="515" y="302">inbox poll · process</text>
+
+      <line id="edge-backend-archive" class="arrow" marker-end="url(#arrowhead)" x1="650" y1="360" x2="386" y2="360"/>
+      <text class="arrow-label" id="edge-backend-archive-label" x="515" y="352">archive</text>
 
       <!-- participants (drawn last, on top of lifeline starts) -->
       <g class="participant client"><rect x="35" y="20" width="150" height="50" rx="8"/><text x="110" y="50">POS Client(s)</text></g>
@@ -191,6 +318,70 @@
     <h2>Recent events (latest 100)</h2>
     <ul id="feed-list"><li class="empty-hint">Waiting for events…</li></ul>
   </div>
+
+  <div class="panel">
+    <h2>Security</h2>
+    <h3 class="security-subhead">How security is handled today</h3>
+    <ul class="prose">
+      <li>The client never holds long-lived credentials for the Mediator — every access is a
+        presigned URL, scoped to one object, expiring in 10 minutes.</li>
+      <li>The Backend-issued JWT (from <code>/login</code>) is the only thing authorizing calls back
+        to the Backend itself (<code>/upload-receipts</code>, <code>/monitor/events</code>), and it
+        also expires quickly.</li>
+      <li>Every client-supplied identifier (device id, receipt id) is checked against a strict
+        allow-list pattern before it's used to build a storage path — closes off path-traversal /
+        arbitrary-write attempts.</li>
+      <li>Backend secrets (S3 keys, JWT signing secret) live only as Fly.io secrets, never committed
+        to the repo.</li>
+      <li>Monitor event reports are validated (known type, bounded field lengths, bounded request
+        size) before being broadcast to viewers.</li>
+    </ul>
+    <h3 class="security-subhead">What's deliberately not done (this is a demo)</h3>
+    <ul class="prose">
+      <li><code>/login</code> accepts any well-formed device id — there's no device enrollment or
+        allow-list, so anything can start a session claiming to be any device.</li>
+    </ul>
+    <h3 class="security-subhead">Toward a zero-trust client</h3>
+    <ul class="prose">
+      <li><strong>Real enrollment</strong>: issue each device its own credential (a client
+        certificate or pre-shared secret) when it's provisioned; <code>/login</code> verifies that
+        credential instead of trusting a self-chosen id.</li>
+      <li><strong>Scope by identity</strong>: bind presigned upload URLs to the authenticated
+        device's own path (e.g. <code>inbox/&lt;deviceId&gt;/&lt;receiptId&gt;.json</code>) so one
+        device's credential can never be used to write into another device's namespace.</li>
+      <li><strong>Continuous verification</strong>: short-lived tokens already help; a fuller
+        zero-trust posture re-checks device health/identity periodically and can revoke instantly,
+        rather than just waiting out a fixed expiry.</li>
+      <li><strong>Attestation</strong>: verify the client binary/runtime hasn't been tampered with
+        before granting it a session (code signing, remote attestation).</li>
+      <li><strong>Stronger transport</strong>: mutual TLS between client and Backend instead of
+        relying on a bearer token alone.</li>
+      <li>The core shape of this architecture already fits zero-trust well: the Backend is the
+        single policy-enforcement point, and the client never talks to the Mediator without a fresh,
+        narrowly-scoped credential issued for that one call.</li>
+    </ul>
+  </div>
+</div>
+
+<aside class="side-col">
+  <div class="panel">
+    <h2>Session totals</h2>
+    <dl class="stats">
+      <div class="stat-tile">
+        <dt>Receipts sent</dt>
+        <dd id="stat-sent">0</dd>
+      </div>
+      <div class="stat-tile">
+        <dt>Receipts received</dt>
+        <dd id="stat-received">0</dd>
+      </div>
+      <div class="stat-tile">
+        <dt>Receipts archived</dt>
+        <dd id="stat-archived">0</dd>
+      </div>
+    </dl>
+  </div>
+</aside>
 </main>
 
 <script>
@@ -198,9 +389,36 @@
   const feed = document.getElementById('feed-list');
   const clientsList = document.getElementById('clients-list');
   const connStatus = document.getElementById('conn-status');
+  const statSent = document.getElementById('stat-sent');
+  const statReceived = document.getElementById('stat-received');
+  const statArchived = document.getElementById('stat-archived');
+  const reconnectAlert = document.getElementById('reconnect-alert');
+  const reconnectAlertDismiss = document.getElementById('reconnect-alert-dismiss');
   const clients = new Map();
   const MAX_FEED = 100;
   const MAX_CLIENTS = 20;
+  let sentCount = 0;
+  let receivedCount = 0;
+  let archivedCount = 0;
+  let everConnected = false;
+  let missedEvents = false;
+
+  reconnectAlertDismiss.addEventListener('click', function () {
+    reconnectAlert.hidden = true;
+  });
+
+  function resetState() {
+    sentCount = 0;
+    receivedCount = 0;
+    archivedCount = 0;
+    statSent.textContent = '0';
+    statReceived.textContent = '0';
+    statArchived.textContent = '0';
+    clients.clear();
+    renderClients();
+    feed.innerHTML = '<li class="empty-hint">Waiting for events…</li>';
+    reconnectAlert.hidden = false;
+  }
 
   const edgeForType = {
     'login': 'edge-client-backend',
@@ -210,6 +428,7 @@
     'inbox-poll': 'edge-backend-inbox',
     'receipt-processed': 'edge-backend-inbox',
     'receipt-archived': 'edge-backend-archive',
+    'catalog-publish': 'edge-backend-config',
   };
 
   function pulse(edgeId, label) {
@@ -231,7 +450,8 @@
     if (placeholder) placeholder.remove();
     const li = document.createElement('li');
     const outcomeClass = evt.outcome === 'error' ? 'outcome-error' : evt.outcome === 'ok' ? 'outcome-ok' : '';
-    const parts = [evt.timestamp, evt.type, '(' + evt.source + ')', evt.clientId, evt.receiptId, evt.outcome, evt.detail]
+    const durationText = typeof evt.durationMs === 'number' ? Math.round(evt.durationMs) + 'ms' : null;
+    const parts = [evt.timestamp, evt.type, '(' + evt.source + ')', evt.clientId, evt.receiptId, evt.outcome, durationText, evt.detail]
       .filter(Boolean);
     li.textContent = parts.join(' ');
     if (outcomeClass) li.classList.add(outcomeClass);
@@ -263,13 +483,30 @@
     }
   }
 
+  function updateStats(evt) {
+    if (evt.outcome !== 'ok') return;
+    // "sent" = the client successfully PUT a receipt to the Mediator; "received" = the
+    // Backend read it out of the inbox; "archived" = it finished copying it to
+    // /archive/ and removing it from /inbox/.
+    if (evt.type === 'receipt-uploaded') {
+      sentCount += 1;
+      statSent.textContent = String(sentCount);
+    } else if (evt.type === 'receipt-processed') {
+      receivedCount += 1;
+      statReceived.textContent = String(receivedCount);
+    } else if (evt.type === 'receipt-archived') {
+      archivedCount += 1;
+      statArchived.textContent = String(archivedCount);
+    }
+  }
+
   function handleEvent(evt) {
     addFeedItem(evt);
     trackClient(evt);
+    updateStats(evt);
     const edgeId = edgeForType[evt.type];
     if (edgeId) {
-      const label = evt.type + (evt.outcome ? ' (' + evt.outcome + ')' : '');
-      pulse(edgeId, label);
+      pulse(edgeId, evt.type);
     }
   }
 
@@ -277,10 +514,18 @@
   source.onopen = function () {
     connStatus.textContent = 'connected';
     connStatus.className = 'connected';
+    // Only a genuine reconnect (we were connected before, then dropped) means events
+    // could have been missed — the very first connection has nothing to miss yet.
+    if (everConnected && missedEvents) {
+      resetState();
+    }
+    everConnected = true;
+    missedEvents = false;
   };
   source.onerror = function () {
     connStatus.textContent = 'disconnected';
     connStatus.className = 'disconnected';
+    missedEvents = true;
   };
   source.onmessage = function (e) {
     try {

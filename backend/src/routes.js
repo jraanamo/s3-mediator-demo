@@ -8,6 +8,10 @@ const PRESIGN_EXPIRY_SECONDS = 600;
 // them to safe characters so they can't escape the inbox/archive prefixes
 // (path traversal / arbitrary key write).
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// SSE comment lines, sent periodically so any idle-connection timeout in
+// front of the Backend (proxies commonly close silent connections after
+// ~60s) never sees this stream as idle and cuts it.
+const SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
 function bearerToken(request) {
   const header = request.headers.authorization ?? '';
@@ -29,7 +33,19 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
     });
     reply.raw.write('\n');
     monitorHub.addStream(reply.raw);
-    request.raw.on('close', () => monitorHub.removeStream(reply.raw));
+
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(': keep-alive\n\n');
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, SSE_HEARTBEAT_INTERVAL_MS);
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat);
+      monitorHub.removeStream(reply.raw);
+    });
   });
 
   app.post('/monitor/events', { bodyLimit: MAX_EVENT_BODY_BYTES }, async (request, reply) => {
@@ -50,6 +66,7 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
   });
 
   app.post('/login', async (request, reply) => {
+    const startedAt = process.hrtime.bigint();
     const { deviceId } = request.body ?? {};
     if (!SAFE_ID_RE.test(deviceId ?? '')) {
       monitorHub.broadcast({ type: 'login', source: 'backend', outcome: 'error', detail: 'invalid deviceId' });
@@ -62,7 +79,8 @@ export function registerRoutes(app, store, monitorHub, pageHtml) {
       store.presignGet(CATALOG_KEY, PRESIGN_EXPIRY_SECONDS),
     ]);
 
-    monitorHub.broadcast({ type: 'login', source: 'backend', clientId: deviceId, outcome: 'ok' });
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    monitorHub.broadcast({ type: 'login', source: 'backend', clientId: deviceId, outcome: 'ok', durationMs });
 
     return {
       token,

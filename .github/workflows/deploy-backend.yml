@@ -6,7 +6,15 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   test:
@@ -27,7 +35,9 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    concurrency: deploy-backend
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: true
     defaults:
       run:
         working-directory: backend
@@ -37,3 +47,13 @@ jobs:
       - run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Comment deployment URL on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --edit-last \
+            --create-if-none \
+            --body "🚀 Deployed to https://backend-gentle-rain-7280.fly.dev (shared single instance, not an isolated preview — this is the same backend \`main\` deploys to)."
